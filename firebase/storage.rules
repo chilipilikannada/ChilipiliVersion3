@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Photos and recordings. Families only reach their own children's files.
+// These rules read Firestore, so allow Storage to read Firestore when the console asks.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function staff() {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'admin'];
+    }
+    function parentOf(cid) {
+      return signedIn()
+        && request.auth.token.email.lower() in firestore.get(/databases/(default)/documents/children/$(cid)).data.parentEmails;
+    }
+    function media(mb) {
+      return request.resource.size < mb * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType.matches('audio/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
+
+    // Packet photos, speaking recordings, voice notes in messages
+    match /handins/{cid}/{file}  { allow read: if staff() || parentOf(cid); allow create: if (staff() || parentOf(cid)) && media(20); }
+    match /speaking/{cid}/{file} { allow read: if staff() || parentOf(cid); allow create: if (staff() || parentOf(cid)) && media(20); }
+    match /messages/{cid}/{file} { allow read: if staff() || parentOf(cid); allow create: if (staff() || parentOf(cid)) && media(20); }
+    // The teacher's replies
+    match /feedback/{cid}/{file} { allow read: if staff() || parentOf(cid); allow create: if staff() && media(20); }
+    // Class feed photos and the teacher's word recordings
+    match /posts/{file} { allow read: if signedIn(); allow write: if staff() && media(10); }
+    match /voice/{file} { allow read: if signedIn(); allow write: if staff() && media(5); }
+    // The teacher's own worksheets (PDFs or images) for packet weeks
+    match /packets/{file} { allow read: if signedIn(); allow write: if staff() && media(20); }
+  }
+}

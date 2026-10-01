@@ -1,0 +1,30 @@
+{
+  "name": "chilipili",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chili Pili Kannada: learn Kannada at home with Gini, weekly packets and a month-end meet with the teacher.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:single": "vite build --mode single",
+    "rules": "npx --yes firebase-tools deploy --only firestore,storage"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans-kannada": "^5.3.0",
+    "firebase": "^12.19.0",
+    "lucide-react": "^1.48.0",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.1",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
