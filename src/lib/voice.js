@@ -67,13 +67,15 @@ export async function serverSpeechUrl(text, lang = "kn") {
   const key = lang + ":" + text;
   if (cache.has(key)) return cache.get(key);
   try {
-    const { audio, type } = await api("/api/speak", { text, lang });
+    const { audio, type, engine } = await api("/api/speak", { text, lang });
     const bin = Uint8Array.from(atob(audio), (c) => c.charCodeAt(0));
     const url = URL.createObjectURL(new Blob([bin], { type: type || "audio/mpeg" }));
-    cache.set(key, url); serverVoice = true; return url;
+    cache.set(key, url); serverVoice = true; serverEngine = engine || "google"; return url;
   } catch (e) { if (e.code === "offline" || e.code === "not_configured" || e.code === 501) { serverVoice = false; try { window.__chiliCloud = false; } catch {} } return null; }
 }
 export const serverVoiceKnown = () => serverVoice;
+let serverEngine = null; // "google" (natural) or "builtin" (robotic, no key needed)
+export const serverEngineKnown = () => serverEngine;
 
 // Browser speech recognition (Chrome, Edge, Safari on iPhone and iPad). lang: "en-US" or "kn-IN".
 export const canListen = () => typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);

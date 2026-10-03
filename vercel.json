@@ -45,5 +45,11 @@
       "path": "/api/weekly-summary",
       "schedule": "0 13 * * 1"
     }
-  ]
+  ],
+  "functions": {
+    "api/speak.js": {
+      "includeFiles": "node_modules/@echogarden/espeak-ng-emscripten/**",
+      "maxDuration": 20
+    }
+  }
 }

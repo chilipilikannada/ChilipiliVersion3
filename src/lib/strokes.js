@@ -170,18 +170,18 @@ export function score(L, strokes, { mode = "trace", model = null, easy = false }
   const free = mode === "write";
   const { coverage, precision } = shapeScore(L, strokes, { free, easy });
   let stars = easy
-    ? (coverage >= 0.75 && precision >= 0.7 ? 3 : coverage >= 0.6 && precision >= 0.6 ? 2 : coverage >= 0.4 && precision >= 0.45 ? 1 : 0)
+    ? (coverage >= 0.7 && precision >= 0.65 ? 3 : coverage >= 0.5 && precision >= 0.5 ? 2 : 1)
     : coverage >= 0.85 && precision >= 0.85 ? 3 : coverage >= 0.72 && precision >= 0.76 ? 2 : coverage >= 0.5 && precision >= 0.6 ? 1 : 0;
   if (easy) {
     const tips = [];
-    if (coverage < 0.6) tips.push(free ? "Almost! Look at the letter once more." : "Go over all the dots.");
+    if (coverage < 0.5) tips.push(free ? "Good try! Look at the letter once more and write it bigger." : "Go over all the dots.");
     return { stars, coverage, precision, tips, orderOk: true };
   }
   const tips = [];
   if (coverage < 0.72) tips.push(free ? "Some parts of the letter are missing. Look at the model again." : "Trace over all of the grey letter.");
   if (precision < 0.76) tips.push(free ? "Try to keep the shape closer to the model." : "Stay on the grey lines.");
   let orderOk = true;
-  if (model && model.strokes && model.strokes.length && !free) {
+  if (model && model.strokes && model.strokes.length && !model.auto && !free) {
     const o = orderCheck(model.strokes, strokes);
     orderOk = o.ok; tips.push(...o.tips);
     if (!orderOk) stars = Math.min(stars, 2);
@@ -265,7 +265,91 @@ export function centreDots(L, model = null, spacing = 0.05) {
 
 // Which dots the child's ink has passed over.
 export function litDots(dots, strokes, tol = 0.045) {
+  // tol is in box units (the box is 1 tall); easy mode passes a wider one
   const lit = new Array(dots.length).fill(false);
   for (const s of strokes) for (const [x, y] of s) for (let i = 0; i < dots.length; i++) if (!lit[i] && Math.abs(dots[i].x - x) < tol && Math.abs(dots[i].y - y) < tol && Math.hypot(dots[i].x - x, dots[i].y - y) < tol) lit[i] = true;
   return lit;
+}
+
+// ---------- Automatic writing path (used when the teacher hasn't recorded the letter) ----------
+// Thins the letter to its centre line, trims tiny spurs, then walks it into strokes:
+// start at the leftmost free end (Kannada letters are mostly begun on the left), keep going
+// in the straightest direction, and start a new stroke from the next leftmost end when stuck.
+const autoCache = new Map();
+export function autoPath(L) {
+  const key = L.text + "|" + L.aspect;
+  if (autoCache.has(key)) return autoCache.get(key);
+  const G = 160, W = Math.round(G * L.aspect);
+  let sk;
+  try {
+    const c = document.createElement("canvas"); c.width = W; c.height = G;
+    const g = c.getContext("2d"); drawGlyph(g, L, G, { fill: "#000" });
+    const px = g.getImageData(0, 0, W, G).data;
+    const mask = new Uint8Array(W * G);
+    for (let i = 0; i < W * G; i++) mask[i] = px[i * 4 + 3] > 110 ? 1 : 0;
+    sk = skeleton(mask, W, G);
+  } catch { return null; }
+  const N8 = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+  const on = (x, y) => x >= 0 && y >= 0 && x < W && y < G && sk[y * W + x];
+  const nbrs = (i) => { const x = i % W, y = (i / W) | 0, out = []; for (const [dx, dy] of N8) if (on(x + dx, y + dy)) out.push((y + dy) * W + x + dx); return out; };
+  // trim spurs shorter than 7 px (skeleton noise at corners)
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < sk.length; i++) {
+      if (!sk[i] || nbrs(i).length !== 1) continue;
+      const path = [i]; let prev = -1, cur = i;
+      while (path.length < 8) {
+        const nb = nbrs(cur).filter((j) => j !== prev && !path.includes(j));
+        if (nb.length !== 1 || nbrs(nb[0]).length > 2) break;
+        prev = cur; cur = nb[0]; path.push(cur);
+      }
+      if (path.length < 7) for (const j of path) sk[j] = 0;
+    }
+  }
+  const seen = new Uint8Array(W * G);
+  const leftmost = (pred) => { let best = -1; for (let x = 0; x < W && best < 0; x++) for (let y = 0; y < G; y++) { const i = y * W + x; if (sk[i] && !seen[i] && pred(i)) { best = i; break; } } return best; };
+  const strokes = [];
+  for (let guard = 0; guard < 12; guard++) {
+    let start = leftmost((i) => nbrs(i).filter((j) => !seen[j]).length === 1);
+    if (start < 0) start = leftmost(() => true);
+    if (start < 0) break;
+    const pts = [start]; seen[start] = 1;
+    let dir = [0, -1]; // for a loop, go up first (clockwise from the left)
+    let cur = start;
+    for (;;) {
+      const cand = nbrs(cur).filter((j) => !seen[j]);
+      if (!cand.length) break;
+      const cx = cur % W, cy = (cur / W) | 0;
+      let best = cand[0], bestDot = -9;
+      for (const j of cand) { const dx = (j % W) - cx, dy = ((j / W) | 0) - cy, l = Math.hypot(dx, dy); const d = (dx * dir[0] + dy * dir[1]) / l; if (d > bestDot) { bestDot = d; best = j; } }
+      // mark the other candidates seen too, so the line doesn't split into hairs
+      for (const j of cand) if (j !== best && nbrs(j).every((q) => q === cur || q === best || seen[q] || cand.includes(q))) seen[j] = 1;
+      seen[best] = 1; pts.push(best);
+      const back = pts[Math.max(0, pts.length - 5)];
+      const vx = (best % W) - (back % W), vy = ((best / W) | 0) - ((back / W) | 0), vl = Math.hypot(vx, vy) || 1;
+      dir = [vx / vl, vy / vl]; cur = best;
+    }
+    // close a loop if we ended next to where we started
+    const sx = start % W, sy = (start / W) | 0, ex = cur % W, ey = (cur / W) | 0;
+    if (pts.length > 20 && Math.hypot(sx - ex, sy - ey) <= 2) pts.push(start);
+    let s = pts.map((i) => [(i % W) / G, ((i / W) | 0) / G]);
+    if (s.length < 2) continue;
+    // smooth
+    s = s.map((p, i) => { let x = 0, y = 0, n = 0; for (let k = Math.max(0, i - 3); k <= Math.min(s.length - 1, i + 3); k++) { x += s[k][0]; y += s[k][1]; n++; } return [x / n, y / n]; });
+    const len = s.slice(1).reduce((t, p, i) => t + Math.hypot(p[0] - s[i][0], p[1] - s[i][1]), 0);
+    if (len < 0.06) continue;
+    strokes.push(thin(s, 0.01));
+  }
+  // The top hook (talakattu) is written last: move strokes that sit only in the top band to the end.
+  const top = L.bbox.y0 + 0.36 * (L.bbox.y1 - L.bbox.y0);
+  const isTop = (st) => st.every(([, y]) => y < top);
+  const ordered = strokes.length > 1 ? [...strokes.filter((st) => !isTop(st)), ...strokes.filter(isTop)] : strokes;
+  const out = ordered.length ? { strokes: ordered, auto: true } : null;
+  autoCache.set(key, out);
+  return out;
+}
+
+// Easy tracing verdict, from how many dots were passed. Any real attempt earns a star.
+export function easyTraceScore(f) {
+  const stars = f >= 0.9 ? 3 : f >= 0.75 ? 2 : 1;
+  return { stars, coverage: f, precision: 1, tips: stars < 3 ? ["Next time, go over every dot!"] : [], orderOk: true };
 }

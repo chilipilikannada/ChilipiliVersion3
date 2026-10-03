@@ -9,12 +9,39 @@ export function voiceKey(text) {
   return "v" + h.toString(36);
 }
 
-let knVoice = null;
+// Device voices. Most phones and computers have no Kannada voice, but nearly all have Hindi
+// (Chrome, Edge, Safari, Android), so we fall back to Hindi reading the same word in Devanagari.
+let knVoice = null, hiVoice = null;
 function findVoice() {
-  try { knVoice = speechSynthesis.getVoices().find((v) => /^kn/i.test(v.lang)) || null; } catch { knVoice = null; }
+  try {
+    const vs = speechSynthesis.getVoices();
+    const pick = (re) => vs.find((v) => re.test(v.lang) && /google|natural|online|enhanced|premium/i.test(v.name)) || vs.find((v) => re.test(v.lang)) || null;
+    knVoice = pick(/^kn/i); hiVoice = pick(/^hi/i);
+  } catch { knVoice = null; hiVoice = null; }
 }
-if (typeof window !== "undefined" && window.speechSynthesis) { findVoice(); speechSynthesis.onvoiceschanged = findVoice; }
-export const hasDeviceVoice = () => !!knVoice || (typeof window !== "undefined" && window.__chiliCloud === true);
+if (typeof window !== "undefined" && window.speechSynthesis) { findVoice(); speechSynthesis.addEventListener ? speechSynthesis.addEventListener("voiceschanged", findVoice) : (speechSynthesis.onvoiceschanged = findVoice); }
+export const hasDeviceVoice = () => true; // there is always a voice to try now; playWord says so if none works
+
+// Kannada → Devanagari, letter for letter (the two Unicode blocks are parallel, 0x380 apart).
+const KN_FIX = { 0x0C8E: 0x090F, 0x0C92: 0x0913, 0x0CC6: 0x0947, 0x0CCA: 0x094B, 0x0CB1: 0x0930, 0x0CDE: 0x0933 };
+export function knToDeva(text) {
+  let out = "";
+  for (const ch of String(text)) {
+    const c = ch.codePointAt(0);
+    if (c < 0x0C80 || c > 0x0CFF) { out += ch; continue; }
+    if (c === 0x0CD5 || c === 0x0CD6 || c === 0x0C80 || c >= 0x0CF1) continue;
+    out += String.fromCodePoint(KN_FIX[c] || c - 0x380);
+  }
+  return out;
+}
+
+function speakWith(text, voice, lang, rate) {
+  const u = new SpeechSynthesisUtterance(text);
+  if (voice) u.voice = voice;
+  u.lang = voice ? voice.lang : lang; u.rate = rate;
+  try { speechSynthesis.cancel(); } catch {}
+  speechSynthesis.speak(u);
+}
 
 let current = null;
 export function stopAudio() {
@@ -23,22 +50,45 @@ export function stopAudio() {
 }
 
 // lib: { [voiceKey]: storagePath }
+// One shared player, unlocked during the tap itself, so iPhones still play it after the voice arrives from the server.
+const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+let player = null;
+function unlock() {
+  if (typeof Audio === "undefined") return null;
+  if (!player) player = new Audio();
+  try { player.src = SILENT; player.play().catch(() => {}); } catch {}
+  return player;
+}
+async function playOn(url) {
+  const a = player || new Audio();
+  current = a; a.src = url;
+  try { await a.play(); return true; } catch { return false; }
+}
+
 export async function playWord(text, lib) {
   stopAudio();
+  unlock();
   const path = lib && lib[voiceKey(text)];
   if (path) {
     const url = await store.url(path);
-    if (url) { current = new Audio(url); await current.play().catch(() => {}); return "teacher"; }
+    if (url && (await playOn(url))) return "teacher";
   }
+  const synth = typeof window !== "undefined" && !!window.speechSynthesis;
+  if (synth) findVoice(); // Chrome fills the voice list late; look again on each tap
   try {
-    const { serverSpeechUrl } = await import("./voice.js");
-    const u = await serverSpeechUrl(text);
-    if (u) { current = new Audio(u); await current.play().catch(() => {}); return "server"; }
+    const { serverSpeechUrl, serverEngineKnown } = await import("./voice.js");
+    // Order: Google's natural voice > the device's own Kannada voice > the built-in robotic voice.
+    if (!(knVoice && serverEngineKnown() === "builtin")) {
+      const u = await serverSpeechUrl(text);
+      if (u && !(knVoice && serverEngineKnown() === "builtin") && (await playOn(u))) return "server";
+    }
   } catch {}
-  if (knVoice) {
-    const u = new SpeechSynthesisUtterance(text); u.voice = knVoice; u.lang = knVoice.lang; u.rate = 0.8;
-    speechSynthesis.speak(u); return "device";
-  }
+  if (!synth) return null;
+  if (knVoice) { speakWith(text, knVoice, "kn-IN", 0.8); return "device"; }
+  const hasKannada = /[ಀ-೿]/.test(text);
+  if (hiVoice) { speakWith(hasKannada ? knToDeva(text) : text, hiVoice, "hi-IN", 0.8); return "device-hi"; }
+  // No list yet (some Android phones): ask for Kannada by language and let the phone choose.
+  if (speechSynthesis.getVoices().length === 0) { speakWith(text, null, "kn-IN", 0.8); return "device"; }
   return null;
 }
 

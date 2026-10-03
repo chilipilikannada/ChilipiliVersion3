@@ -444,7 +444,8 @@ export function lessonTexts(l) {
 }
 
 // Easy dot-to-dot tracing: on for gentle-pace and young children unless switched off.
-export const easyOf = (child) => (child && typeof child.easyTrace === "boolean" ? child.easyTrace : paceOf(child) === "gentle" || (child && +child.age <= 6));
+// Dot tracing with Gini showing the way: for ages 5 to 8 and gentle pace (a parent or teacher can switch it).
+export const easyOf = (child) => (child && typeof child.easyTrace === "boolean" ? child.easyTrace : paceOf(child) === "gentle" || (child && +child.age > 0 && +child.age <= 8));
 
 // ---------- Talk with Gini: questions to answer out loud ----------
 // [question, question in English, answer frame, answer in English]. A null question means

@@ -534,7 +534,7 @@ function WriteSteps({ child, strokeLib, voiceLib, earn, easy, items, steps, memo
       </div>
       <p style={{ textAlign: "center", margin: 0 }}>
         {mode === "watch" ? <>Watch how <b className="kn" style={{ fontSize: 26 }}>{sel}</b> is written</>
-          : mode === "trace" ? <>{easy ? "Follow the dots" : "Trace"} <b className="kn" style={{ fontSize: 26 }}>{sel}</b>{rec ? ". Start at the green dot!" : ""}</>
+          : mode === "trace" ? <>{easy ? "Follow the dots" : "Trace"} <b className="kn" style={{ fontSize: 26 }}>{sel}</b>. Start at the green dot!</>
             : memory ? <>Write <b>{SOUND[sel] ? `"${SOUND[sel]}"` : "the letter you hear"}</b> from memory</>
               : <>Now write <b className="kn" style={{ fontSize: 26 }}>{sel}</b> on your own</>}
         <span className="small muted" style={{ display: "block" }}>{memory ? "Tap the speaker to hear it." : hint}</span>
@@ -552,7 +552,7 @@ function WriteSteps({ child, strokeLib, voiceLib, earn, easy, items, steps, memo
       <div className="row" style={{ justifyContent: "center" }}>
         {mode === "watch" && <button className="btn primary" onClick={() => advance()}>{steps[s + 1] === "trace" ? "I'm ready to trace" : "Next"} <ArrowRight size={18} /></button>}
         {mode !== "watch" && res && res.stars >= 1 && <button className="btn primary" onClick={() => advance(res.stars)}>{s + 1 < steps.length ? `Now: ${STEP_INFO[steps[s + 1]][0].toLowerCase()}` : k + 1 < items.length ? <>Next: <span className="kn">{items[k + 1]}</span></> : "Done"} <ArrowRight size={18} /></button>}
-        {mode !== "watch" && res && res.stars === 0 && tries >= 3 && <button className="btn ghost" onClick={() => advance(0)}><SkipForward size={18} /> Skip for now</button>}
+        {mode !== "watch" && res && res.stars === 0 && tries >= (easy ? 1 : 3) && <button className="btn ghost" onClick={() => advance(0)}><SkipForward size={18} /> Skip for now</button>}
       </div>
     </div>
   );
