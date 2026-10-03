@@ -62,6 +62,18 @@ export function createLocalStore() {
       try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch {}
       authSubs.forEach((cb) => cb(user));
     },
+    async signInKid(code) {
+      const c = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const hit = Object.entries(col("children")).find(([, d]) => String(d.kidCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "") === c && c.length >= 4);
+      if (!hit) throw new Error("That number didn't work. Check it with a grown-up.");
+      user = { uid: "kid_" + hit[0], name: hit[1].name || "", email: "", photo: "", kid: hit[0] };
+      try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch {}
+      authSubs.forEach((cb) => cb(user));
+    },
+    // Preview copy: no email is sent; the code step is skipped.
+    async requestEmailCode() { return { preview: true }; },
+    async signInWithEmailCode(email) { return this.signIn({ name: email.split("@")[0], email }); },
+    async remindKidNumber() { return { ok: true, message: "On the live website, the number is emailed to the grown-up." }; },
     async signOut() {
       user = null; try { localStorage.removeItem(USER_KEY); } catch {}
       authSubs.forEach((cb) => cb(null));

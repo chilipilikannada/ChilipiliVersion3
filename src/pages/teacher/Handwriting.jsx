@@ -3,6 +3,7 @@ import { Check, Trash2 } from "lucide-react";
 import { useApp } from "../../lib/hooks.js";
 import { store } from "../../lib/store/index.js";
 import { ALPHABET } from "../../lib/content.js";
+import { JOURNEY } from "../../lib/journey.js";
 import { voiceKey } from "../../lib/audio.js";
 import LetterPad from "../../components/LetterPad.jsx";
 import { friendlyError } from "../../App.jsx";
@@ -11,8 +12,8 @@ const uniq = (a) => [...new Set(a)];
 export const HAND_SETS = [
   { title: "Vowels", kn: "ಸ್ವರಗಳು", items: ALPHABET.vowels.map((v) => v[0]) },
   { title: "Consonants", kn: "ವ್ಯಂಜನಗಳು", items: ALPHABET.consonants.flat().map((c) => c[0]) },
-  { title: "Vowel signs", kn: "ಕಾಗುಣಿತ", items: uniq(["ಕಾ", "ಕಿ", "ಕೀ", "ಕು", "ಕೂ", "ಕೃ", "ಕೆ", "ಕೇ", "ಕೈ", "ಕೊ", "ಕೋ", "ಕೌ", "ಕಂ", "ಮಾ", "ಮಿ", "ಮೀ", "ಹು", "ಹೂ", "ಮೃ", "ಮೆ", "ಮೇ", "ಬೈ", "ಗೊಂ", "ದುಃ"]) },
-  { title: "Joined letters", kn: "ಒತ್ತಕ್ಷರ", items: ["ಕ್ಕ", "ತ್ತ", "ಪ್ಪ", "ಮ್ಮ", "ನ್ನ", "ಲ್ಲ", "ಸ್ತ", "ಪ್ರ", "ತ್ರ", "ಕ್ಷ", "ಶ್ರ", "ರ್ಯ"] },
+  { title: "Vowel signs", kn: "ಕಾಗುಣಿತ", items: uniq([...JOURNEY.filter((d) => d.section === "signs").flatMap((d) => d.items), "ಕಿ", "ಕೀ", "ಕು", "ಕೂ", "ಕೆ", "ಕೇ", "ಕೈ", "ಕೊ", "ಕೋ", "ಕೌ", "ಹು", "ಹೂ", "ಗೊಂ"]) },
+  { title: "Joined letters", kn: "ಒತ್ತಕ್ಷರ", items: uniq([...JOURNEY.filter((d) => d.section === "joined").flatMap((d) => d.items), "ಶ್ರ"]) },
 ];
 
 // The teacher writes each letter once; children watch it, trace it, and are checked against it.

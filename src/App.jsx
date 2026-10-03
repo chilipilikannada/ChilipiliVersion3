@@ -3,6 +3,8 @@ import { store } from "./lib/store/index.js";
 import { DEFAULT_SCHOOL } from "./lib/config.js";
 import { AppCtx, useDoc, useRoute } from "./lib/hooks.js";
 import Landing from "./pages/Landing.jsx";
+import KidApp from "./pages/kid/KidApp.jsx";
+import SetupGuide from "./pages/SetupGuide.jsx";
 import SignIn from "./pages/SignIn.jsx";
 import ParentApp from "./pages/parent/ParentApp.jsx";
 import TeacherApp from "./pages/teacher/TeacherApp.jsx";
@@ -38,6 +40,7 @@ export default function App() {
   useEffect(() => {
     if (user === undefined) return;
     if (!user) { setProfile(null); return; }
+    if (user.kid) { setProfile({ uid: user.uid, name: user.name || "", email: "", role: "kid", kidId: user.kid }); return; }
     let live = true;
     (async () => {
       try {
@@ -58,9 +61,10 @@ export default function App() {
 
   let page;
   if (user === undefined || (user && profile === undefined)) page = <Loading />;
-  else if (!user) page = route[0] === "signin" ? <SignIn /> : <Landing />;
+  else if (route[0] === "setup") page = <SetupGuide />;
+  else if (!user) page = route[0] === "signin" || route[0] === "kids" ? <SignIn kids={route[0] === "kids"} /> : <Landing />;
   else if (!profile) page = <SignIn />;
-  else page = ctx.isStaff ? <TeacherApp /> : <ParentApp />;
+  else page = profile.role === "kid" ? <KidApp /> : ctx.isStaff ? <TeacherApp /> : <ParentApp />;
 
   return (
     <AppCtx.Provider value={ctx}>

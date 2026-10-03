@@ -38,7 +38,7 @@ export default function Summary({ data }) {
       {s.total === 0 ? <div className="card"><Empty art={<Gini className="gini" />} title="No children yet">Once families join, you'll see every child's level here.</Empty></div> : <>
         <div className="tiles4">
           <Stat n={s.total} label="children" />
-          <Stat n={`${s.handedIn}/${s.total}`} label="packets handed in this week" />
+          <Stat n={`${s.rows.filter((r) => r.missions >= 4).length}/${s.total}`} label="did 4+ missions this week" />
           <Stat n={s.weekActs} label="activities with Gini this week" />
           <Stat n={s.quiet.length} label="quiet for 7 days" warn={s.quiet.length > 0} />
         </div>
@@ -64,9 +64,9 @@ export default function Summary({ data }) {
               <thead><tr><th>Child</th>{SKILLS.map((k) => <th key={k}>{SKILL[k].en}</th>)}<th>This week</th></tr></thead>
               <tbody>{s.rows.map((r) => (
                 <tr key={r.id} onClick={() => go("families", r.id)} style={{ cursor: "pointer" }}>
-                  <td><div className="row" style={{ flexWrap: "nowrap" }}><Avatar name={r.name} size="sm" /><div><b>{r.name}</b><div className="tiny muted">age {r.age} · week {r.week}/{PLAN_WEEKS}{r.confirmed ? "" : " · estimate"}</div></div></div></td>
+                  <td><div className="row" style={{ flexWrap: "nowrap" }}><Avatar name={r.name} size="sm" /><div><b>{r.name}</b><div className="tiny muted">{r.adult ? "grown-up" : `age ${r.age}`} · week {r.week}/{PLAN_WEEKS}{r.confirmed ? "" : " · estimate"}</div></div></div></td>
                   {SKILLS.map((k) => <td key={k}><span style={{ fontSize: 18 }}>{STAGE_EMOJI[r.stages[k] || 0]}</span> {STAGES[r.stages[k] || 0].en}<div className="tiny muted">goal {STAGES[r.goals[k] ?? 0].en}</div></td>)}
-                  <td><b className="num">{r.weekActs}</b> activities · {r.weekStars} ⭐<div className="tiny" style={{ color: r.handedIn ? "var(--leaf)" : "var(--red-deep)" }}>{r.handedIn ? "packet in" : r.meetWeek ? "meet week" : "no packet yet"}{r.lastActive ? ` · ${ago(r.lastActive)}` : ""}</div></td>
+                  <td><b className="num">{r.weekActs}</b> activities · {r.weekStars} ⭐<div className="tiny" style={{ color: r.missions >= 4 ? "var(--leaf)" : r.missions ? "var(--muted)" : "var(--red-deep)" }}>journey day {r.journeyDay} · {r.missions}/6 missions · talked {r.talked}×{r.handedIn ? " · pages sent" : ""}{r.lastActive ? ` · ${ago(r.lastActive)}` : ""}</div></td>
                 </tr>
               ))}</tbody>
             </table>

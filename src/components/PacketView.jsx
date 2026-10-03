@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Printer, Download, FileText, Volume2, PenLine, Puzzle } from "lucide-react";
 import { SKILLS, SKILL, ALPHABET } from "../lib/content.js";
-import { TRACKS, LETTER_WORD, SOUND } from "../lib/course.js";
+import { TRACKS, LETTER_WORD, SOUND, easyOf } from "../lib/course.js";
+import { journeyUnit } from "../lib/journey.js";
 import { packetFor, weekStart, PLAN_WEEKS, isMeetWeek, packetNo } from "../lib/plan.js";
 import { fmtDate, DAY } from "../lib/time.js";
 import { playWord } from "../lib/audio.js";
@@ -14,7 +15,8 @@ import { friendlyError } from "../App.jsx";
 export default function PacketView({ child, week, voiceLib, strokeLib, packetFiles = [], onPractise }) {
   const { say, school } = useApp();
   const [busy, setBusy] = useState(false);
-  const pk = packetFor(child, week);
+  const pk0 = packetFor(child, week);
+  const pk = pk0.meet ? pk0 : { ...pk0, unit: journeyUnit(child) }; // letters follow the child's letter journey
   const from = weekStart(child, week), to = from + 6 * DAY;
   const T = TRACKS[pk.track];
   const extras = packetFiles.filter((f) => +f.week === +week && (!f.track || f.track === "all" || f.track === pk.track));
@@ -23,7 +25,7 @@ export default function PacketView({ child, week, voiceLib, strokeLib, packetFil
     setBusy(true);
     try {
       const { packetPdf, packetFileName } = await import("../lib/packetPdf.js");
-      const bytes = await packetPdf({ child, pk, strokeLib, school: school.schoolName });
+      const bytes = await packetPdf({ child, pk, strokeLib, school: school.schoolName, easy: easyOf(child) });
       const r = await saveFile(packetFileName(child, week), bytes, "application/pdf");
       if (r === "saved") say("Packet saved. Open it to print, or fill it in on a tablet.");
     } catch (e) { say(friendlyError(e), true); }
@@ -60,6 +62,17 @@ export default function PacketView({ child, week, voiceLib, strokeLib, packetFil
         <span className="small muted">Tracing sheets, sentence pages and a grown-ups' page with answers. Print it, or fill it in on an iPad.</span>
       </div>
       <ExtraSheets extras={extras} />
+
+      {pk.theme && (
+        <div className="stack-s">
+          <span className="label">Words of the week · {pk.theme.en} <span className="kn">{pk.theme.kn}</span></span>
+          <div className="words">{pk.theme.words.map((w) => (
+            <button key={w[0]} className="word" style={{ border: 0, cursor: voiceLib ? "pointer" : "default", textAlign: "left" }} onClick={() => voiceLib && playWord(w[0], voiceLib)} aria-label={`${w[1]}, ${w[2]}`}>
+              <b>{w[3]} {w[0]}</b><small>{w[1]} · {w[2]}</small>
+            </button>
+          ))}</div>
+        </div>
+      )}
 
       <div className="stack-s">
         <div className="card-head"><span className="label">Letters · {U.en}</span>{onPractise && <button className="btn ghost small" onClick={() => onPractise("write")}><PenLine size={16} /> Trace on screen</button>}</div>

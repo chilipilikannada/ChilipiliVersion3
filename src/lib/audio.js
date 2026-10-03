@@ -14,7 +14,7 @@ function findVoice() {
   try { knVoice = speechSynthesis.getVoices().find((v) => /^kn/i.test(v.lang)) || null; } catch { knVoice = null; }
 }
 if (typeof window !== "undefined" && window.speechSynthesis) { findVoice(); speechSynthesis.onvoiceschanged = findVoice; }
-export const hasDeviceVoice = () => !!knVoice;
+export const hasDeviceVoice = () => !!knVoice || (typeof window !== "undefined" && window.__chiliCloud === true);
 
 let current = null;
 export function stopAudio() {
@@ -30,6 +30,11 @@ export async function playWord(text, lib) {
     const url = await store.url(path);
     if (url) { current = new Audio(url); await current.play().catch(() => {}); return "teacher"; }
   }
+  try {
+    const { serverSpeechUrl } = await import("./voice.js");
+    const u = await serverSpeechUrl(text);
+    if (u) { current = new Audio(u); await current.play().catch(() => {}); return "server"; }
+  } catch {}
   if (knVoice) {
     const u = new SpeechSynthesisUtterance(text); u.voice = knVoice; u.lang = knVoice.lang; u.rate = 0.8;
     speechSynthesis.speak(u); return "device";
@@ -81,7 +86,7 @@ export function useRecorder(maxSeconds = 60) {
       }, 250);
       return true;
     } catch (e) {
-      setState((s) => ({ ...s, error: e && e.name === "NotAllowedError" ? "denied" : "unsupported" }));
+      setState((s) => ({ ...s, error: e && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "denied" : e && e.name === "NotFoundError" ? "nomic" : "unsupported" }));
       return false;
     }
   }

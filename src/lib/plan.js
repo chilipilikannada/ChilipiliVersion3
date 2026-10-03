@@ -16,7 +16,7 @@ export function childWeek(child, now = Date.now()) {
   if (!child || !child.startDate) return 0;
   const d = Math.floor((now - weekStart(child, 1)) / DAY + 1 / 24);
   if (d < 0) return 0;
-  return Math.min(PLAN_WEEKS, Math.floor(d / 7) + 1);
+  return Math.min(PLAN_WEEKS, Math.floor(d / 7) + 1 + (child.ahead || 0)); // "ahead": weeks a child moved on early
 }
 export const childMonth = (child) => monthOfWeek(Math.max(1, childWeek(child)));
 export const monthInfo = (m) => MONTHS[Math.max(1, Math.min(6, m)) - 1];
@@ -46,7 +46,7 @@ export function kidWeek(child) {
   const w = Math.max(1, childWeek(child));
   const pw = isMeetWeek(w) ? w - 1 : w;
   const pk = packetFor(child, Math.max(1, pw));
-  return { week: w, meet: isMeetWeek(w), packet: pk, track: pk.track, pattern: pk.pattern, unit: pk.unit, words: pk.pattern.words, letters: pk.unit.items || [] };
+  return { week: w, meet: isMeetWeek(w), packet: pk, track: pk.track, pattern: pk.pattern, unit: pk.unit, theme: pk.theme, words: pk.pattern.words, letters: pk.unit.items || [] };
 }
 
 export const monthFor = (child, m) => ({ ...monthInfo(m), ...monthFocus(trackOf(child), m, paceOf(child)) });

@@ -38,16 +38,16 @@ export default function HandIn({ child, week, subs }) {
       }
       await store.add("submissions", { childId: child.id, parentEmails: child.parentEmails, kind: "packet", week, files: out, note: note.trim(), status: "sent", by: profile.uid, byName: profile.name, at: Date.now() });
       setFiles([]); setVoice(null); setNote("");
-      say(`Week ${week} handed in. Your teacher will reply here.`);
+      say("Sent to your teacher. They'll reply here.");
     } catch (e) { say(friendlyError(e), true); }
     setBusy(false);
   }
 
   return (
     <div className="card">
-      <h3>Hand in week {week}</h3>
+      <h3>Send finished pages</h3>
       {sent.map((s) => <Submitted key={s.id} s={s} />)}
-      <p className="muted small">Take a photo of each finished page, or upload a PDF (a scan, or the packet filled in on an iPad). Add a voice note if your child wants to say something to the teacher.</p>
+      <p className="muted small">Any time, no deadline: snap a page as soon as it's done, or upload the PDF filled in on an iPad. What your child does in Gini's space reaches the teacher on its own.</p>
       <PhotoPicker onFiles={(f) => setFiles((x) => [...x, ...f.filter((y) => /^image\//.test(y.type) || y.type === "application/pdf" || /\.pdf$/i.test(y.name))])} label="Upload photos or PDF" />
       <FilePreview files={files} onRemove={(i) => setFiles((x) => x.filter((_, j) => j !== i))} />
       <VoiceRecorder onDone={(b) => setVoice(b)} />

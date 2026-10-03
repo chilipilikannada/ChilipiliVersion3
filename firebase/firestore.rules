@@ -10,19 +10,21 @@ service cloud.firestore {
     function adminEmails() { return ['ashsmi0621@gmail.com']; }
 
     function signedIn()   { return request.auth != null; }
-    function myEmail()    { return request.auth.token.email.lower(); }
+    function myEmail()    { return request.auth.token.get('email', '').lower(); }
+    // A child signed in with their own code can reach only their own things.
+    function kid()        { return signedIn() ? request.auth.token.get('kid', '') : ''; }
     function hasProfile() { return exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
     function me()         { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
     function isStaff()    { return signedIn() && hasProfile() && me().role in ['teacher', 'admin']; }
     function isAdmin()    { return signedIn() && hasProfile() && me().role == 'admin'; }
     function child(id)    { return get(/databases/$(database)/documents/children/$(id)).data; }
     // The document belongs to one of my children.
-    function listed()     { return signedIn() && myEmail() in resource.data.parentEmails; }
+    function listed()     { return signedIn() && ((myEmail() != '' && myEmail() in resource.data.parentEmails) || (kid() != '' && kid() == resource.data.get('childId', ''))); }
     // A new document I'm adding for one of my children, carrying that child's parent list.
     function newListed()  {
       return signedIn()
         && request.resource.data.parentEmails == child(request.resource.data.childId).parentEmails
-        && myEmail() in request.resource.data.parentEmails;
+        && ((myEmail() != '' && myEmail() in request.resource.data.parentEmails) || (kid() != '' && kid() == request.resource.data.childId));
     }
     function onlyKeys(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
     function joinCode() { return get(/databases/$(database)/documents/settings/join).data.code; }
@@ -48,10 +50,10 @@ service cloud.firestore {
 
     // ---- children ----
     match /children/{id} {
-      allow read: if isStaff() || listed();
+      allow read: if isStaff() || listed() || (kid() != '' && kid() == id);
       // A parent adds their own child. With open sign-up, or the right class code, the child starts straight away.
       allow create: if isStaff()
-                    || (signedIn()
+                    || (signedIn() && myEmail() != ''
                         && request.resource.data.parentEmails == [myEmail()]
                         && request.resource.data.consentAt is number
                         && request.resource.data.name is string && request.resource.data.name.size() <= 80
@@ -63,7 +65,9 @@ service cloud.firestore {
                                 && joinCode() is string && joinCode().size() >= 4
                                 && request.resource.data.joinCode == joinCode())));
       // Families can update stars and progress from the kids' space, the path, and the child's name and age.
-      allow update: if isStaff() || (listed() && onlyKeys(['stars', 'streak', 'weekDone', 'lastActive', 'letters', 'track', 'name', 'age']));
+      allow update: if isStaff()
+                    || (listed() && onlyKeys(['kidCode', 'stars', 'streak', 'weekDone', 'lastActive', 'letters', 'spoken', 'journey', 'ahead', 'track', 'pace', 'level', 'levelBy', 'levelAt', 'easyTrace', 'adultDone', 'name', 'age']))
+                    || (kid() != '' && kid() == id && onlyKeys(['stars', 'streak', 'weekDone', 'lastActive', 'letters', 'spoken', 'journey', 'ahead', 'track', 'pace', 'level', 'levelBy', 'levelAt', 'easyTrace', 'adultDone']));
       allow delete: if isAdmin();
     }
 
@@ -96,6 +100,18 @@ service cloud.firestore {
     match /posts/{id} { allow read: if signedIn(); allow write: if isStaff(); }
     match /voice/{id} { allow read: if signedIn(); allow write: if isStaff(); }
     // The teacher's handwriting (stroke order) and their own worksheets for packet weeks
+    // Phrases a child wanted to say (Say it in Kannada): the family and teachers can read them.
+    match /phrases/{id} {
+      allow read: if isStaff() || listed();
+      allow create: if (isStaff() || newListed()) && request.resource.data.en is string && request.resource.data.en.size() <= 300;
+      allow delete: if isStaff();
+    }
+    // Kid sign-in codes: the family creates and removes them; only the server reads them.
+    match /kidCodes/{code} {
+      allow read: if false;
+      allow create: if (isStaff() || (newListed() && myEmail() != '')) && request.resource.data.keys().hasOnly(['childId', 'parentEmails', 'at']);
+      allow delete: if isStaff() || (signedIn() && myEmail() != '' && myEmail() in resource.data.parentEmails);
+    }
     match /strokes/{id}     { allow read: if signedIn(); allow write: if isStaff(); }
     match /packetFiles/{id} { allow read: if signedIn(); allow write: if isStaff(); }
   }

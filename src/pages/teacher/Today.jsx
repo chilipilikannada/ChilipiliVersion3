@@ -84,6 +84,7 @@ export default function Today({ data, badges }) {
       </div>
 
       <div className="grid3">
+        <button className="card" style={{ border: 0, textAlign: "left", cursor: "pointer" }} onClick={() => go("plan")}><FileText color="var(--red)" /><h3>Course plan</h3><p className="muted small">All 24 weeks at a glance, a no-repeats check, and how to add your own extras.</p></button>
         <button className="card" style={{ border: 0, textAlign: "left", cursor: "pointer" }} onClick={() => go("summary")}><BarChart3 color="var(--red)" /><h3>Class summary</h3><p className="muted small">Every child's level and goal, this week's effort, spreadsheet.</p></button>
         <button className="card" style={{ border: 0, textAlign: "left", cursor: "pointer" }} onClick={() => go("feed")}><Megaphone color="var(--red)" /><h3>Class feed</h3><p className="muted small">Share photos and news with every family.</p></button>
         <button className="card" style={{ border: 0, textAlign: "left", cursor: "pointer" }} onClick={() => go("settings")}><Settings color="var(--red)" /><h3>Settings</h3><p className="muted small">Class code, groups, venue, time zone, team.</p></button>

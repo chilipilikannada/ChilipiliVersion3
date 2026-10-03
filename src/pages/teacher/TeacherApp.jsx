@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { LayoutDashboard, Users, Inbox, CalendarHeart, MessageCircle, Megaphone, AudioLines, Settings as Cog, BarChart3, PenLine, FileText } from "lucide-react";
+import BrandName from "../../components/BrandName.jsx";
+import { LayoutDashboard, Users, Inbox, CalendarHeart, MessageCircle, Megaphone, AudioLines, Settings as Cog, BarChart3, PenLine, FileText, Map as MapIcon } from "lucide-react";
 import { useApp, useWatch, useVoiceLib, useStrokeLib, usePacketFiles } from "../../lib/hooks.js";
 import { Logo } from "../../components/Art.jsx";
 import { Avatar } from "../../components/ui.jsx";
@@ -14,6 +15,7 @@ import Settings from "./Settings.jsx";
 import Summary from "./Summary.jsx";
 import Handwriting from "./Handwriting.jsx";
 import Sheets from "./Sheets.jsx";
+import CoursePlan from "./CoursePlan.jsx";
 import { meetState } from "../parent/Meets.jsx";
 
 const TABS = [
@@ -22,6 +24,7 @@ const TABS = [
   ["summary", "Class summary", BarChart3],
   ["review", "Review", Inbox],
   ["sheets", "Packets", FileText],
+  ["plan", "Course plan", MapIcon],
   ["meets", "Meets", CalendarHeart],
   ["messages", "Messages", MessageCircle],
   ["feed", "Class feed", Megaphone],
@@ -42,10 +45,11 @@ export default function TeacherApp() {
   const [meets] = useWatch("meets", []);
   const [posts] = useWatch("posts", []);
   const [users] = useWatch("users", []);
+  const [phrases] = useWatch("phrases", []);
   const voiceLib = useVoiceLib();
   const strokeLib = useStrokeLib();
   const packetFiles = usePacketFiles();
-  const data = { children, subs, activity, logs, notes, messages, meets, posts, users, voiceLib, strokeLib, packetFiles };
+  const data = { children, subs, activity, logs, notes, messages, meets, posts, users, voiceLib, strokeLib, packetFiles, phrases };
 
   const tab = route[0] || "today";
   const badges = useMemo(() => {
@@ -58,12 +62,12 @@ export default function TeacherApp() {
     };
   }, [children, subs, meets, messages]);
 
-  const Page = { today: Today, families: Families, review: Review, meets: Meets, messages: Inboxes, feed: Feed, voice: Voice, settings: Settings, summary: Summary, handwriting: Handwriting, sheets: Sheets }[tab] || Today;
+  const Page = { today: Today, families: Families, review: Review, meets: Meets, messages: Inboxes, feed: Feed, voice: Voice, settings: Settings, summary: Summary, handwriting: Handwriting, sheets: Sheets, plan: CoursePlan }[tab] || Today;
   return (
     <div className="shell">
       <header className="appbar">
         <div className="appbar-in">
-          <button className="brand" onClick={() => go("today")}><Logo /><span>Chili Pili<small>Teacher</small></span></button>
+          <button className="brand" onClick={() => go("today")}><Logo /><BrandName light /><span className="pill yellow hide-s" style={{ marginLeft: 6 }}>Teacher</span></button>
           <span className="spacer" />
           <button className="child-switch" onClick={() => go("settings")}><Avatar name={profile.name} size="sm" /> <span className="hide-s">{profile.name}</span></button>
         </div>

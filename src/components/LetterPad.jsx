@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw, Undo2, Check, Play, Save } from "lucide-react";
-import { ensureFont, layout, drawGlyph, score, encodeStrokes, thin, fitRecord } from "../lib/strokes.js";
+import { ensureFont, layout, drawGlyph, score, encodeStrokes, thin, fitRecord, centreDots, litDots } from "../lib/strokes.js";
 
 const RED = "#c8102e", GREEN = "#1f8a4c", GHOST = "#eadfc4", GUIDE = "#f0e2c2";
 
 // One letter (or word) to watch, trace, write alone, or (for the teacher) record.
 // mode: "watch" | "trace" | "write" | "record"
-export default function LetterPad({ text, mode = "trace", record, onDone, onSave, maxHeight = 360, checkLabel = "Check" }) {
+export default function LetterPad({ text, mode = "trace", record, onDone, onSave, maxHeight = 360, checkLabel = "Check", easy = false }) {
   const [L, setL] = useState(null);
   const [w, setW] = useState(0);
   const [n, setN] = useState(0);
@@ -25,6 +25,8 @@ export default function LetterPad({ text, mode = "trace", record, onDone, onSave
   }, []);
 
   const model = useMemo(() => (L && record ? fitRecord(record, L) : null), [L, record]);
+  const dots = useMemo(() => (L && easy && mode !== "write" && mode !== "record" ? centreDots(L, model) : null), [L, easy, mode, model]);
+  const [lit, setLit] = useState(0);
   const H = L && w ? Math.max(90, Math.min(w / L.aspect, maxHeight)) : 0; // pixels per box unit
   const Wpx = L ? H * L.aspect : 0;
 
@@ -40,7 +42,7 @@ export default function LetterPad({ text, mode = "trace", record, onDone, onSave
     for (const y of [L.bbox.y0, L.bbox.y1]) { g.beginPath(); g.moveTo(0, y * H); g.lineTo(Wpx, y * H); g.stroke(); }
     g.setLineDash([6, 6]); g.beginPath(); g.moveTo(0, 0.5 * H); g.lineTo(Wpx, 0.5 * H); g.stroke(); g.setLineDash([]);
     // the letter
-    if (mode !== "write") drawGlyph(g, L, H, { fill: GHOST });
+    if (mode !== "write") drawGlyph(g, L, H, { fill: dots ? "#f4eddd" : GHOST });
     else if (result) drawGlyph(g, L, H, { stroke: "#b9a47a", dash: [5, 5], width: 1.5 });
     const ms = model && model.strokes;
     const line = (s, color, width) => {
@@ -81,7 +83,20 @@ export default function LetterPad({ text, mode = "trace", record, onDone, onSave
         badge(s[0], k + 1, GREEN);
       });
     }
-    if (mode === "trace" && ms && !result) {
+    if (dots) {
+      const on = litDots(dots, strokes.current);
+      const r = Math.max(5, H * 0.02);
+      dots.forEach((d, i) => {
+        g.fillStyle = on[i] ? GREEN : "#b08a55";
+        g.beginPath(); g.arc(d.x * H, d.y * H, on[i] ? r * 1.25 : r, 0, Math.PI * 2); g.fill();
+      });
+      if (ms && mode === "trace" && !result) {
+        const firsts = dots.filter((d) => d.first);
+        const k = Math.min(strokes.current.length, firsts.length - 1);
+        if (firsts[k]) { const f = firsts[k]; badge([f.x, f.y], f.stroke + 1, GREEN); }
+      }
+    }
+    if (mode === "trace" && ms && !result && !dots) {
       const k = strokes.current.length;
       if (k < ms.length) { arrow(ms[k], GREEN); badge(ms[k][0], k + 1, GREEN); }
     }
@@ -114,11 +129,18 @@ export default function LetterPad({ text, mode = "trace", record, onDone, onSave
     for (const ev of evs.length ? evs : [e.nativeEvent]) s.push(at(ev));
     draw();
   }
-  function up() { if (!drawing.current) return; drawing.current = false; setN((v) => v + 1); }
-  function clear() { strokes.current = []; setResult(null); setN((v) => v + 1); }
+  function up() {
+    if (!drawing.current) return; drawing.current = false; setN((v) => v + 1);
+    if (dots && mode === "trace" && !result) {
+      const on = litDots(dots, strokes.current); const f = on.filter(Boolean).length / Math.max(1, dots.length);
+      setLit(f);
+      if (f >= 0.85) setTimeout(check, 250);
+    }
+  }
+  function clear() { strokes.current = []; setResult(null); setLit(0); setN((v) => v + 1); }
   function undo() { strokes.current.pop(); setN((v) => v + 1); }
   function check() {
-    const r = score(L, strokes.current, { mode, model });
+    const r = { ...score(L, strokes.current, { mode, model, easy }), strokes: encodeStrokes(strokes.current.map((s) => thin(s, 0.012))), aspect: L.aspect };
     setResult(r); onDone && onDone(r);
   }
 
@@ -139,6 +161,7 @@ export default function LetterPad({ text, mode = "trace", record, onDone, onSave
       )}
       {mode !== "watch" && (
         <>
+          {dots && mode === "trace" && !result && <div className="dot-meter" aria-label={`${Math.round(lit * 100)}% of dots`}><i style={{ width: `${Math.round(lit * 100)}%` }} /></div>}
           {result && mode !== "record" && (
             <div className={`pad-result ${result.stars >= 2 ? "good" : result.stars === 1 ? "ok" : "retry"}`} role="status">
               <span className="pad-stars" aria-label={`${result.stars} of 3 stars`}>{[1, 2, 3].map((k) => <span key={k} style={{ opacity: k <= result.stars ? 1 : 0.2 }}>⭐</span>)}</span>

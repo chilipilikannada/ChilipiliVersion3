@@ -18,11 +18,11 @@ export default function Review({ data }) {
     <div className="stack">
       <div className="page-title"><h1>Review</h1><p className="muted">Oldest first. One tap to react; add a line or a voice note if you like. Families see it straight away.</p></div>
       {queue.length ? queue.map((s) => <ReviewCard key={s.id} s={s} child={data.children.find((c) => c.id === s.childId)} />)
-        : <div className="card"><Empty art={<Gini className="gini" mood="cheer" />} title="All caught up!">New packet photos and speaking recordings land here.</Empty></div>}
+        : <div className="card"><Empty art={<Gini className="gini" mood="cheer" />} title="All caught up!">Paper pages, speaking recordings and Talk answers land here as children do them.</Empty></div>}
       {done.length > 0 && (
         <div className="card">
           <h3>Recently reviewed</h3>
-          <ul className="list">{done.map((s) => { const c = data.children.find((x) => x.id === s.childId); return <li key={s.id}><Avatar name={c ? c.name : "?"} size="sm" /><div className="grow"><b>{c ? c.name : "Child"}</b> <span className="sub">· {s.kind === "speaking" ? "speaking" : "packet"} week {s.week}</span>{s.feedback && <div className="sub">{s.feedback}</div>}</div><span className="pill green">{REACT[s.reaction] || "Reviewed"}</span></li>; })}</ul>
+          <ul className="list">{done.map((s) => { const c = data.children.find((x) => x.id === s.childId); return <li key={s.id}><Avatar name={c ? c.name : "?"} size="sm" /><div className="grow"><b>{c ? c.name : "Child"}</b> <span className="sub">· {s.kind === "packet" ? "pages" : s.kind} week {s.week}</span>{s.feedback && <div className="sub">{s.feedback}</div>}</div><span className="pill green">{REACT[s.reaction] || "Reviewed"}</span></li>; })}</ul>
         </div>
       )}
     </div>
@@ -50,7 +50,7 @@ function ReviewCard({ s, child }) {
   const other = (s.files || []).filter((f) => !/^image|^audio/.test(f.type));
   return (
     <div className="card">
-      <div className="row"><Avatar name={child ? child.name : "?"} /><div className="grow" style={{ flex: 1 }}><b>{child ? child.name : "A child"}</b><div className="sub small muted">{s.kind === "speaking" ? "Speaking with Gini" : `Packet · week ${s.week}${theme ? ` · ${theme.en}` : ""}`} · {ago(s.at)}</div></div></div>
+      <div className="row"><Avatar name={child ? child.name : "?"} /><div className="grow" style={{ flex: 1 }}><b>{child ? child.name : "A child"}</b><div className="sub small muted">{s.kind === "speaking" ? "Speaking with Gini" : s.kind === "talk" ? "Talked with Gini (answers out loud)" : s.kind === "reading" ? "Read a story aloud" : s.kind === "story" ? `Wrote a story · week ${s.week}` : s.kind === "family" ? `Wrote for family · ${s.note || ""}` : `Pages · week ${s.week}${theme ? ` · ${theme.en}` : ""}`} · {ago(s.at)}</div></div></div>
       {imgs.length > 0 && <div className="photos">{imgs.map((f) => <button className="ph" key={f.path} onClick={() => setZoom(f.path)} aria-label="Enlarge photo"><StoredImage path={f.path} alt="" /></button>)}</div>}
       {auds.map((f) => <div key={f.path} className="stack-s"><span className="tiny muted">{f.name}</span><StoredAudio path={f.path} /></div>)}
       {other.length > 0 && <div className="row">{other.map((f) => <StoredFileLink key={f.path} file={f} />)}</div>}

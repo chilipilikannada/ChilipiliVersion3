@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-  getRedirectResult, signOut as fbSignOut,
+  getRedirectResult, signOut as fbSignOut, signInWithCustomToken,
 } from "firebase/auth";
 import {
   getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where,
@@ -26,9 +26,38 @@ export function createFirebaseStore(config) {
   return {
     mode: "cloud",
     onAuth(cb) {
-      return onAuthStateChanged(auth, (u) =>
-        cb(u ? { uid: u.uid, name: u.displayName || "", email: (u.email || "").toLowerCase(), photo: u.photoURL || "" } : null)
-      );
+      return onAuthStateChanged(auth, async (u) => {
+        if (!u) return cb(null);
+        let kid = null;
+        try { kid = (await u.getIdTokenResult()).claims.kid || null; } catch {}
+        cb({ uid: u.uid, name: u.displayName || "", email: (u.email || "").toLowerCase(), photo: u.photoURL || "", kid });
+      });
+    },
+    // Grown-ups without Google: a 6-digit code emailed from the teacher's Gmail.
+    async requestEmailCode(email) {
+      const r = await fetch("/api/email-code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(j.error || "Couldn't send the code."), { code: j.code });
+      return j;
+    },
+    async signInWithEmailCode(email, code) {
+      const r = await fetch("/api/email-code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email, code }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.token) throw new Error(j.error || "That code didn't work.");
+      await signInWithCustomToken(auth, j.token);
+    },
+    async remindKidNumber(email) {
+      const r = await fetch("/api/kid-reminder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Couldn't send it just now.");
+      return j;
+    },
+    // A child signs in with their own code; the server checks it and hands back a sign-in token.
+    async signInKid(code) {
+      const r = await fetch("/api/kid-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.token) throw new Error(j.error || "That code didn't work. Check it with a grown-up.");
+      await signInWithCustomToken(auth, j.token);
     },
     async signIn() {
       const p = new GoogleAuthProvider();

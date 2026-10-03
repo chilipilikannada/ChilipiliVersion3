@@ -12,7 +12,8 @@ service firebase.storage {
     }
     function parentOf(cid) {
       return signedIn()
-        && request.auth.token.email.lower() in firestore.get(/databases/(default)/documents/children/$(cid)).data.parentEmails;
+        && ((request.auth.token.get('kid', '') == cid)
+            || request.auth.token.get('email', '').lower() in firestore.get(/databases/(default)/documents/children/$(cid)).data.parentEmails);
     }
     function media(mb) {
       return request.resource.size < mb * 1024 * 1024

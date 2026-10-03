@@ -1,5 +1,6 @@
 // The course: three paths, the letters (script) and sentence patterns for all 18 packets.
 // Please have a Kannada teacher review every Kannada line before families use it.
+import { storyFor, dictationOf, RETELL } from "./stories.js";
 
 // ---------- Paths ----------
 // A child has two settings: the sentence path (how hard the sentences are) and the
@@ -419,7 +420,8 @@ export function lesson(track, n, pace, opts = {}) {
         ? { title: "Write what you say", steps: ["Trace the letters in Gini's Write, then do the tracing sheet.", "Write the 3 built sentences on the lines.", pattern.prompts.write] }
         : { title: "Write longer", steps: ["Make a sentence longer, one step at a time, on the sentence page.", pattern.prompts.long, "Dictation: a grown-up reads the sentences aloud and you write them."] },
   };
-  return { track: t, pace: pc, n, pattern, unit, tasks };
+  const theme = themeFor(n);
+  return { track: t, pace: pc, n, pattern, unit, tasks, theme };
 }
 
 // Month summary for a path: letters covered and sentence patterns.
@@ -433,10 +435,255 @@ export function monthFocus(track, m, pace) {
 // All Kannada text a child may hear this packet (for the teacher's voice library).
 export function lessonTexts(l) {
   const out = [];
-  for (const w of l.pattern.words) out.push({ text: w[0], rom: w[1], en: w[2], pic: w[3] });
+  for (const w of [...(l.theme ? l.theme.words : []), ...l.pattern.words]) out.push({ text: w[0], rom: w[1], en: w[2], pic: w[3] });
   for (const m of l.pattern.model) out.push({ text: m[0], rom: m[1], en: m[2] });
   for (const b of l.pattern.build) out.push({ text: b[0], en: b[1] });
   for (const s of l.pattern.ladder) out.push({ text: s[0], en: s[1] });
   const seen = new Set();
   return out.filter((x) => (seen.has(x.text) ? false : seen.add(x.text)));
 }
+
+// Easy dot-to-dot tracing: on for gentle-pace and young children unless switched off.
+export const easyOf = (child) => (child && typeof child.easyTrace === "boolean" ? child.easyTrace : paceOf(child) === "gentle" || (child && +child.age <= 6));
+
+// ---------- Talk with Gini: questions to answer out loud ----------
+// [question, question in English, answer frame, answer in English]. A null question means
+// "you ask": the child says the Kannada line to Gini.
+export const TALK = {
+  this: [["ಇದು ಏನು?", "What is this? (Gini shows a picture)", "ಇದು ___.", "This is a ___."], ["ಅದು ಏನು?", "What is that?", "ಅದು ___.", "That is a ___."], [null, "Point at something and ask Gini what it is", "ಇದು ಏನು?", "What is this?"]],
+  me: [["ನಿನ್ನ ಹೆಸರು ಏನು?", "What is your name?", "ನನ್ನ ಹೆಸರು ___.", "My name is ___."], ["ನಿನಗೆ ಎಷ್ಟು ವರ್ಷ?", "How old are you?", "ನನಗೆ ___ ವರ್ಷ.", "I am ___."], ["ನಿನ್ನ ಊರು ಯಾವುದು?", "Where are you from?", "ನನ್ನ ಊರು ___.", "My town is ___."]],
+  like: [["ನಿನಗೆ ಏನು ಇಷ್ಟ?", "What do you like?", "ನನಗೆ ___ ಇಷ್ಟ.", "I like ___."], ["ನಿನಗೆ ಏನು ಇಷ್ಟ ಇಲ್ಲ?", "What don't you like?", "ನನಗೆ ___ ಇಷ್ಟ ಇಲ್ಲ.", "I don't like ___."], ["ಅಮ್ಮನಿಗೆ ಏನು ಇಷ್ಟ?", "What does Amma like?", "ಅಮ್ಮನಿಗೆ ___ ಇಷ್ಟ.", "Amma likes ___."]],
+  where: [["ನಿನ್ನ ಚೀಲ ಎಲ್ಲಿದೆ?", "Where is your bag?", "ನನ್ನ ಚೀಲ ___ ಇದೆ.", "My bag is ___."], ["ನಿನ್ನ ಆಟಿಕೆ ಎಲ್ಲಿದೆ?", "Where is your toy?", "ನನ್ನ ಆಟಿಕೆ ___ ಮೇಲೆ ಇದೆ.", "My toy is on the ___."], [null, "Ask Gini where the cat is", "ಬೆಕ್ಕು ಎಲ್ಲಿದೆ?", "Where is the cat?"]],
+  have: [["ನಿನ್ನ ಹತ್ತಿರ ಏನು ಇದೆ?", "What do you have?", "ನನ್ನ ಹತ್ತಿರ ___ ಇದೆ.", "I have ___."], ["ನಿನ್ನ ಹತ್ತಿರ ಎಷ್ಟು ಪುಸ್ತಕಗಳು ಇವೆ?", "How many books do you have?", "ನನ್ನ ಹತ್ತಿರ ___ ಪುಸ್ತಕಗಳು ಇವೆ.", "I have ___ books."], ["ನಿನಗೆ ಎಷ್ಟು ಕೈಗಳು ಇವೆ?", "How many hands do you have?", "ನನಗೆ ಎರಡು ಕೈಗಳು ಇವೆ.", "I have two hands."]],
+  do: [["ನೀನು ಬೆಳಿಗ್ಗೆ ಏನು ತಿನ್ನುತ್ತೀಯ?", "What do you eat in the morning?", "ನಾನು ಬೆಳಿಗ್ಗೆ ___ ತಿನ್ನುತ್ತೇನೆ.", "I eat ___ in the morning."], ["ನೀನು ಏನು ಕುಡಿಯುತ್ತೀಯ?", "What do you drink?", "ನಾನು ___ ಕುಡಿಯುತ್ತೇನೆ.", "I drink ___."], ["ನೀನು ಸಂಜೆ ಏನು ಮಾಡುತ್ತೀಯ?", "What do you do in the evening?", "ನಾನು ಸಂಜೆ ___ ಆಡುತ್ತೇನೆ.", "I play ___ in the evening."]],
+  they: [["ಅಮ್ಮ ಏನು ಮಾಡುತ್ತಾರೆ?", "What does Amma do?", "ಅಮ್ಮ ___ ಮಾಡುತ್ತಾರೆ.", "Amma does ___."], ["ನಾಯಿ ಏನು ಮಾಡುತ್ತದೆ?", "What does a dog do?", "ನಾಯಿ ಬೊಗಳುತ್ತದೆ.", "A dog barks."], ["ನಿನ್ನ ಗೆಳೆಯ ಏನು ಮಾಡುತ್ತಾನೆ?", "What does your friend do?", "ನನ್ನ ಗೆಳೆಯ ___ ಆಡುತ್ತಾನೆ.", "My friend plays ___."]],
+  ask: [[null, "Ask Gini her name", "ನಿನ್ನ ಹೆಸರು ಏನು?", "What is your name?"], [null, "Ask Gini how she is", "ನೀನು ಹೇಗಿದ್ದೀಯ?", "How are you?"], [null, "Ask Gini where she lives", "ನೀನು ಎಲ್ಲಿ ಇರುತ್ತೀಯ?", "Where do you live?"]],
+  past: [["ನಿನ್ನೆ ನೀನು ಏನು ತಿಂದೆ?", "What did you eat yesterday?", "ನಿನ್ನೆ ನಾನು ___ ತಿಂದೆ.", "Yesterday I ate ___."], ["ನಿನ್ನೆ ನೀನು ಎಲ್ಲಿಗೆ ಹೋದೆ?", "Where did you go yesterday?", "ನಿನ್ನೆ ನಾನು ___ಗೆ ಹೋದೆ.", "Yesterday I went to ___."], ["ಇವತ್ತು ನೀನು ಏನು ಆಡಿದೆ?", "What did you play today?", "ಇವತ್ತು ನಾನು ___ ಆಡಿದೆ.", "Today I played ___."]],
+  want: [["ನಿನಗೆ ಏನು ಬೇಕು?", "What do you want?", "ನನಗೆ ___ ಬೇಕು.", "I want ___."], ["ನಾಳೆ ನೀನು ಏನು ಮಾಡುತ್ತೀಯ?", "What will you do tomorrow?", "ನಾಳೆ ನಾನು ___.", "Tomorrow I will ___."], ["ನಿನಗೆ ಹಾಲು ಬೇಕಾ?", "Do you want milk?", "ಹೌದು, ನನಗೆ ಹಾಲು ಬೇಕು. / ಬೇಡ.", "Yes, I want milk. / No."]],
+  describe: [["ಆನೆ ದೊಡ್ಡದಾ, ಚಿಕ್ಕದಾ?", "Is an elephant big or small?", "ಆನೆ ದೊಡ್ಡದು.", "An elephant is big."], ["ಆಕಾಶ ಯಾವ ಬಣ್ಣ?", "What colour is the sky?", "ಆಕಾಶ ನೀಲಿ ಬಣ್ಣ.", "The sky is blue."], ["ಇವತ್ತು ಚಳಿ ಇದೆಯಾ?", "Is it cold today?", "ಹೌದು, ಇವತ್ತು ಚಳಿ ಇದೆ. / ಇಲ್ಲ.", "Yes, it's cold today. / No."]],
+  cases: [["ನೀನು ಬೆಳಿಗ್ಗೆ ಎಲ್ಲಿಗೆ ಹೋಗುತ್ತೀಯ?", "Where do you go in the morning?", "ನಾನು ___ಗೆ ಹೋಗುತ್ತೇನೆ.", "I go to ___."], ["ಮೀನು ಎಲ್ಲಿ ಇರುತ್ತದೆ?", "Where do fish live?", "ಮೀನು ನೀರಿನಲ್ಲಿ ಇರುತ್ತದೆ.", "Fish live in water."], ["ನೀನು ಯಾರ ಜೊತೆ ಆಡುತ್ತೀಯ?", "Who do you play with?", "ನಾನು ___ ಜೊತೆ ಆಡುತ್ತೇನೆ.", "I play with ___."]],
+  and: [["ನಿನಗೆ ಯಾವ ಎರಡು ಹಣ್ಣು ಇಷ್ಟ?", "Which two fruits do you like?", "ನನಗೆ ___ ಮತ್ತು ___ ಇಷ್ಟ.", "I like ___ and ___."], ["ನಿನಗೆ ಹಾಲು ಬೇಕಾ ಅಥವಾ ನೀರು ಬೇಕಾ?", "Do you want milk or water?", "ನನಗೆ ___ ಬೇಕು.", "I want ___."], ["ನಿನಗೆ ಏನು ಇಷ್ಟ, ಏನು ಇಷ್ಟ ಇಲ್ಲ?", "What do you like, and what don't you?", "ನನಗೆ ___ ಇಷ್ಟ, ಆದರೆ ___ ಇಷ್ಟ ಇಲ್ಲ.", "I like ___, but I don't like ___."]],
+  because: [["ನಿನಗೆ ಯಾವ ಆಟ ಇಷ್ಟ? ಏಕೆ?", "Which game do you like? Why?", "ನನಗೆ ___ ಇಷ್ಟ, ಏಕೆಂದರೆ ___.", "I like ___ because ___."], ["ನೀನು ಏಕೆ ಜಾಕೆಟ್ ಹಾಕಿದೆ?", "Why did you wear a jacket?", "ಏಕೆಂದರೆ ಚಳಿ ಇತ್ತು.", "Because it was cold."], ["ನೀನು ಏಕೆ ನೀರು ಕುಡಿದೆ?", "Why did you drink water?", "ಏಕೆಂದರೆ ನನಗೆ ಬಾಯಾರಿಕೆ ಆಗಿತ್ತು.", "Because I was thirsty."]],
+  then: [["ಬೆಳಿಗ್ಗೆ ಮೊದಲು ನೀನು ಏನು ಮಾಡುತ್ತೀಯ?", "What do you do first in the morning?", "ಮೊದಲು ನಾನು ___.", "First I ___."], ["ಆಮೇಲೆ ಏನು ಮಾಡುತ್ತೀಯ?", "What do you do after that?", "ಆಮೇಲೆ ನಾನು ___.", "Then I ___."], ["ರಾತ್ರಿ ಕೊನೆಗೆ ಏನು ಮಾಡುತ್ತೀಯ?", "What do you do last at night?", "ಕೊನೆಗೆ ನಾನು ಮಲಗುತ್ತೇನೆ.", "Finally I sleep."]],
+  can: [["ನಿನಗೆ ಈಜಲು ಬರುತ್ತದಾ?", "Can you swim?", "ಹೌದು, ನನಗೆ ಈಜಲು ಬರುತ್ತದೆ. / ಇಲ್ಲ.", "Yes, I can swim. / No."], ["ನಿನಗೆ ಏನು ಮಾಡಲು ಬರುತ್ತದೆ?", "What can you do?", "ನನಗೆ ___ಲು ಬರುತ್ತದೆ.", "I can ___."], ["ಮಲಗುವ ಮೊದಲು ಏನು ಮಾಡಬೇಕು?", "What must you do before bed?", "ಹಲ್ಲು ಉಜ್ಜಬೇಕು.", "Brush my teeth."]],
+  person: [["ನಿನಗೆ ಯಾರು ತುಂಬಾ ಇಷ್ಟ?", "Who do you love a lot?", "ನನಗೆ ___ ತುಂಬಾ ಇಷ್ಟ.", "I love ___ a lot."], ["ಅವರು ಎಲ್ಲಿ ಇರುತ್ತಾರೆ?", "Where do they live?", "ಅವರು ___ನಲ್ಲಿ ಇರುತ್ತಾರೆ.", "They live in ___."], ["ಅವರು ನಿನಗೆ ಏನು ಮಾಡುತ್ತಾರೆ?", "What do they do for you?", "ಅವರು ನನಗೆ ___.", "They ___ for me."]],
+  story: [["ಕಥೆಯಲ್ಲಿ ಯಾರು ಇದ್ದರು?", "Who was in the story?", "ಒಂದು ___ ಇತ್ತು.", "There was a ___."], ["ಒಂದು ದಿನ ಏನಾಯಿತು?", "What happened one day?", "ಒಂದು ದಿನ ___.", "One day ___."], ["ಕೊನೆಗೆ ಏನಾಯಿತು?", "What happened in the end?", "ಕೊನೆಗೆ ___.", "In the end ___."]],
+  letter: [["ಅಜ್ಜಿಗೆ ಏನು ಹೇಳುತ್ತೀಯ?", "What will you tell Ajji?", "ಅಜ್ಜಿ, ನಾನು ಚೆನ್ನಾಗಿದ್ದೇನೆ.", "Ajji, I am well."], [null, "Ask Ajji how she is", "ನೀವು ಹೇಗಿದ್ದೀರಿ?", "How are you?"], ["ನೀನು ಯಾವಾಗ ಬರುತ್ತೀಯ?", "When will you come?", "ನಾನು ___ ಬರುತ್ತೇನೆ.", "I will come ___."]],
+  news: [["ಇವತ್ತು ಏನು ಸುದ್ದಿ?", "What's the news today?", "ಇವತ್ತು ___.", "Today ___."], ["ಅದು ಎಲ್ಲಿ ನಡೆಯಿತು?", "Where did it happen?", "ಅದು ___ನಲ್ಲಿ ನಡೆಯಿತು.", "It happened in ___."], ["ಯಾರು ಗೆದ್ದರು?", "Who won?", "___ ಗೆದ್ದರು.", "___ won."]],
+  compare: [["ಆನೆ ದೊಡ್ಡದಾ, ಬೆಕ್ಕು ದೊಡ್ಡದಾ?", "Which is bigger, an elephant or a cat?", "ಆನೆ ಬೆಕ್ಕಿಗಿಂತ ದೊಡ್ಡದು.", "An elephant is bigger than a cat."], ["ನಿನಗಿಂತ ಯಾರು ಎತ್ತರ?", "Who is taller than you?", "___ ನನಗಿಂತ ಎತ್ತರ.", "___ is taller than me."], ["ನಿನಗೆ ಬೇಸಿಗೆ ಇಷ್ಟವೋ, ಚಳಿಗಾಲ ಇಷ್ಟವೋ?", "Do you like summer or winter more?", "ನನಗೆ ___ಗಿಂತ ___ ಇಷ್ಟ.", "I like ___ more than ___."]],
+  festival: [["ನಿನಗೆ ಯಾವ ಹಬ್ಬ ಇಷ್ಟ?", "Which festival do you like?", "ನನಗೆ ___ ಇಷ್ಟ.", "I like ___."], ["ಹಬ್ಬದಲ್ಲಿ ನೀವು ಏನು ಮಾಡುತ್ತೀರಿ?", "What do you do at the festival?", "ನಾವು ___.", "We ___."], ["ಹಬ್ಬಕ್ಕೆ ಅಮ್ಮ ಏನು ಮಾಡುತ್ತಾರೆ?", "What does Amma make for the festival?", "ಅಮ್ಮ ___ ಮಾಡುತ್ತಾರೆ.", "Amma makes ___."]],
+  book: [["ನಿನ್ನ ಕಥೆಯ ಹೆಸರು ಏನು?", "What is your story called?", "ನನ್ನ ಕಥೆಯ ಹೆಸರು ___.", "My story is called ___."], ["ನಿನ್ನ ಕಥೆಯಲ್ಲಿ ಯಾರು ಇದ್ದಾರೆ?", "Who is in your story?", "ನನ್ನ ಕಥೆಯಲ್ಲಿ ___ ಇದೆ.", "In my story there is ___."], ["ಕೊನೆಗೆ ಏನಾಗುತ್ತದೆ?", "What happens at the end?", "ಕೊನೆಗೆ ___.", "In the end ___."]],
+};
+// Everyday questions: one opens every day's mission.
+export const DAILY_TALK = [
+  ["ನಮಸ್ಕಾರ! ಹೇಗಿದ್ದೀಯ?", "Hello! How are you?", "ನಾನು ಚೆನ್ನಾಗಿದ್ದೇನೆ.", "I am fine."],
+  ["ಇವತ್ತು ನೀನು ಏನು ತಿಂದೆ?", "What did you eat today?", "ಇವತ್ತು ನಾನು ___ ತಿಂದೆ.", "Today I ate ___."],
+  ["ಇವತ್ತು ಹವಾಮಾನ ಹೇಗಿದೆ?", "What's the weather like today?", "ಇವತ್ತು ___ ಇದೆ. (ಬಿಸಿಲು, ಮಳೆ, ಚಳಿ)", "Today it is ___ (sunny, rainy, cold)."],
+  ["ನಿನ್ನ ಅಚ್ಚುಮೆಚ್ಚಿನ ಆಟ ಯಾವುದು?", "What's your favourite game?", "ನನ್ನ ಅಚ್ಚುಮೆಚ್ಚಿನ ಆಟ ___.", "My favourite game is ___."],
+  ["ನೀನು ಇವತ್ತು ಖುಷಿಯಾಗಿದ್ದೀಯಾ?", "Are you happy today?", "ಹೌದು, ನಾನು ಖುಷಿಯಾಗಿದ್ದೇನೆ.", "Yes, I am happy."],
+  ["ಶಾಲೆಯಲ್ಲಿ ಇವತ್ತು ಏನು ಮಾಡಿದೆ?", "What did you do at school today?", "ಶಾಲೆಯಲ್ಲಿ ನಾನು ___.", "At school I ___."],
+];
+export const talkFor = (pattern) => (TALK[pattern.id] || []).map(([q, qEn, a, aEn]) => ({ q, qEn, a, aEn }));
+
+// ---------- Daily missions: six days a week, about 15 minutes each ----------
+export const DAYS = [
+  { en: "New words", icon: "🌱" },
+  { en: "Letters", icon: "✏️" },
+  { en: "Sentences", icon: "🧩" },
+  { en: "Remember", icon: "🔁" },
+  { en: "Say more", icon: "🗣️" },
+  { en: "Show what you know", icon: "🏅" },
+];
+
+export const STORY_DAYS = [
+  { en: "Read the story", icon: "📖" },
+  { en: "Understand it", icon: "🤔" },
+  { en: "Dictation", icon: "✍️" },
+  { en: "Tell it back", icon: "🗣️" },
+  { en: "Write your own", icon: "📝" },
+  { en: "Show what you know", icon: "🏅" },
+];
+export const daysFor = (track) => (track === "long" ? STORY_DAYS : DAYS);
+
+// Earlier packets, for review (last 3).
+export function reviewLessons(track, n, pace) {
+  const out = [];
+  for (let k = n - 1; k >= Math.max(1, n - 3); k--) out.push(lesson(track, k, pace));
+  return out;
+}
+
+// Big writers: each week is built around a story.
+function storyPlan(l, day, { seed = 1 } = {}) {
+  const st = storyFor(l.n), P = l.pattern;
+  const items = [...new Set([...(l.unit.items || []), ...(l.unit.review || [])])].slice(0, 3);
+  const short = st.lines.filter((x) => !/"/.test(x) && x.split(" ").length <= 7);
+  const dict = dictationOf(st, 5);
+  const sentences = st.lines.map((x, i) => [x, st.en_lines[i]]);
+  const plans = [
+    [
+      { kind: "talk", title: "Warm up with Gini", items: [DAILY_TALK.map(([q, qEn, a, aEn]) => ({ q, qEn, a, aEn, daily: true }))[seed % DAILY_TALK.length]] },
+      { kind: "listen", title: "Words from the story", cards: st.words.map((w) => ({ kn: w[0], rom: w[1], en: w[2], pic: w[3] })) },
+      { kind: "story", title: `Read: ${st.en}`, story: st, record: true },
+    ],
+    [
+      { kind: "questions", title: "Answer the questions", story: st },
+      { kind: "build", title: "Story sentences in order", rounds: shuffleSeed(short, seed).slice(0, 3).map((kn) => ({ type: "order", kn, en: st.en_lines[st.lines.indexOf(kn)] })) },
+      { kind: "write", title: "Letter practice", items, steps: ["write"] },
+    ],
+    [
+      { kind: "dictation", title: "Dictation: listen and write", lines: dict.slice(0, 3) },
+      { kind: "speak", title: "Read aloud", items: st.lines.slice(0, 3).map((kn, i) => ({ kn, en: st.en_lines[i] })) },
+    ],
+    [
+      { kind: "talk", title: "Tell the story back", items: RETELL.map((r) => ({ ...r, hints: st.words })) },
+      { kind: "build", title: "Make it longer", rounds: P.ladder.slice(1).map(([kn, en], j) => ({ type: "longer", kn, en, prev: P.ladder[j][0] })) },
+      { kind: "play", title: "What does it mean?", mode: "sentences", sentences },
+    ],
+    [
+      { kind: "storywrite", title: "Write your own story", story: st },
+    ],
+    [
+      { kind: "questions", title: "Story quiz", story: st },
+      { kind: "dictation", title: "Dictation from memory", lines: dict.slice(3, 5).length ? dict.slice(3, 5) : dict.slice(0, 2) },
+      { kind: "story", title: "Read the whole story to your teacher", story: st, record: true, mustRecord: true },
+    ],
+  ];
+  return plans[Math.max(0, Math.min(5, day - 1))];
+}
+
+export function dayPlan(l, day, { easy = false, review = [], seed = 1 } = {}) {
+  if (l.track === "long") return storyPlan(l, day, { seed });
+  const P = l.pattern, items = [...new Set([...(l.unit.items || []), ...(l.unit.review || [])])];
+  const half = Math.ceil(items.length / 2);
+  const firstHalf = items.slice(0, Math.min(half, easy ? 2 : 4)), secondHalf = items.slice(half, half + (easy ? 2 : 4));
+  const talk = talkFor(P), daily = DAILY_TALK.map(([q, qEn, a, aEn]) => ({ q, qEn, a, aEn, daily: true }));
+  const words = P.words, model = P.model.map(([kn, rom, en]) => ({ kn, rom, en }));
+  const sentences = [...P.model.map((m) => [m[0], m[2]]), ...P.build, ...P.ladder];
+  const rv = review.filter(Boolean);
+  const rvSentences = rv.flatMap((r) => [...r.pattern.build, ...r.pattern.model.map((m) => [m[0], m[2]])]);
+  const rvWords = rv.flatMap((r) => r.pattern.words);
+  const rvLetters = [...new Set(rv.flatMap((r) => r.unit.items || []))].slice(0, 4);
+  const rvTalk = rv.flatMap((r) => talkFor(r.pattern)).filter((t) => t.q);
+  const extraBuild = P.dictation.filter((d) => d.split(" ").length >= 2).map((d) => [d, ""]);
+  const long = l.track !== "start";
+  const th = l.theme || themeFor(l.n), tw = th.words;
+  const picQ = pictureTalk(th, 3, seed), thQ = themeTalk(th);
+  const rvThemeWords = rv.flatMap((r) => (r.theme ? r.theme.words : []));
+  const themeCards = tw.map((w) => ({ kn: w[0], rom: w[1], en: w[2], pic: w[3] }));
+  const shortThemeWords = tw.map((w) => w[0]).filter((w) => [...w].length <= 5);
+  const plans = [
+    [
+      { kind: "talk", title: "Say hello to Gini", items: [daily[(seed + 0) % daily.length], picQ[0]].filter(Boolean) },
+      { kind: "listen", title: `New words: ${th.en}`, cards: [...themeCards, ...model] },
+      { kind: "write", title: "Trace new letters", items: firstHalf, steps: ["watch", "trace"] },
+      { kind: "build", title: "Build 2 sentences", rounds: P.build.slice(0, 2).map(([kn, en]) => ({ type: "order", kn, en })) },
+    ],
+    [
+      { kind: "talk", title: "Talk with Gini", items: [thQ, talk[0]].filter(Boolean) },
+      { kind: "play", title: `Picture game: ${th.en}`, mode: "words", words: tw },
+      { kind: "write", title: "Trace more letters", items: secondHalf.length ? secondHalf : firstHalf, steps: ["watch", "trace"] },
+      { kind: "speak", title: "Name the pictures", items: [...themeCards.slice(0, 3), model[0]] },
+    ],
+    [
+      { kind: "talk", title: "What is this?", items: [picQ[1], talk[1] || talk[0]].filter(Boolean) },
+      { kind: "listen", title: "Listen to the sentences", cards: [...words.map((w) => ({ kn: w[0], rom: w[1], en: w[2], pic: w[3] })), ...model, ...P.build.map(([kn, en]) => ({ kn, en }))] },
+      { kind: "build", title: "Build and fill the gaps", rounds: [...P.build.map(([kn, en]) => ({ type: "order", kn, en })), ...P.blanks.map(([t, ans]) => ({ type: "gap", text: t, ans, kn: t.replace("___", ans) }))] },
+      { kind: "write", title: "Write letters on your own", items: firstHalf, steps: easy ? ["trace", "write"] : ["write"] },
+    ],
+    [
+      { kind: "talk", title: "Remember last week", items: [daily[(seed + 2) % daily.length], ...(rvTalk.length ? [rvTalk[seed % rvTalk.length]] : [])] },
+      { kind: "play", title: "Picture game: this week and last", mode: "words", words: shuffleSeed([...tw, ...rvThemeWords, ...words], seed).slice(0, 14) },
+      { kind: "write", title: "Old and new letters", items: [...(secondHalf.length ? secondHalf : firstHalf).slice(0, 2), ...rvLetters.slice(0, 2)], steps: easy ? ["trace", "write"] : ["write"] },
+      { kind: "build", title: "Last week's sentences", rounds: (rvSentences.length ? rvSentences : P.build).slice(0, 3).map(([kn, en]) => ({ type: "order", kn, en: en || "Put the words in order" })) },
+    ],
+    [
+      { kind: "talk", title: "Answer Gini's questions", items: [...talk.slice(0, 3), picQ[2]].filter(Boolean) },
+      { kind: "speak", title: long ? "Say the long sentence" : "Say the sentences", items: long ? P.ladder.slice(-2).map(([kn, en]) => ({ kn, en })) : model.slice(2, 4) },
+      { kind: "build", title: long ? "Make it longer" : "More sentences", rounds: long ? P.ladder.slice(1).map(([kn, en], j) => ({ type: "longer", kn, en, prev: P.ladder[j][0] })) : [...extraBuild.slice(0, 2).map(([kn]) => ({ type: "order", kn, en: "Listen, then put the words in order" })), ...P.build.slice(2).map(([kn, en]) => ({ type: "order", kn, en }))] },
+      { kind: "write", title: `Write a word: ${th.en}`, items: (shortThemeWords.length ? shortThemeWords : (l.unit.words || P.words.map((w) => w[0]))).slice(0, 2), steps: easy ? ["trace"] : ["trace", "write"] },
+    ],
+    [
+      { kind: "talk", title: "Tell Gini about your week", items: [daily[(seed + 3) % daily.length], talk[2] || talk[0]].filter(Boolean) },
+      { kind: "play", title: long ? "Quiz: what does it mean?" : "Quiz: words and pictures", mode: long ? "sentences" : "words", words: [...tw, ...words], sentences },
+      { kind: "write", title: "Write from memory", items: items.slice(0, easy ? 3 : 5), steps: ["write"], memory: true },
+      { kind: "build", title: "Final sentences", rounds: shuffleSeed(P.build, seed).slice(0, 2).map(([kn, en]) => ({ type: "order", kn, en })) },
+    ],
+  ];
+  return plans[Math.max(0, Math.min(5, day - 1))].filter((s) => !(s.items && !s.items.length) && !(s.rounds && !s.rounds.length));
+}
+function shuffleSeed(a, seed) { const b = [...a]; let s = seed || 1; for (let i = b.length - 1; i > 0; i--) { s = (s * 9301 + 49297) % 233280; const j = Math.floor((s / 233280) * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
+
+// ---------- Word themes: everyday words to recognise and say (one theme a week) ----------
+// words: [kannada, romanised, english, picture]
+export const THEMES = [
+  { id: "family", kn: "ನನ್ನ ಕುಟುಂಬ", en: "My family", words: [["ಅಮ್ಮ", "amma", "mother", "👩"], ["ಅಪ್ಪ", "appa", "father", "👨"], ["ಅಕ್ಕ", "akka", "elder sister", "👧"], ["ಅಣ್ಣ", "aNNa", "elder brother", "👦"], ["ಅಜ್ಜಿ", "ajji", "grandmother", "👵"], ["ಅಜ್ಜ", "ajja", "grandfather", "👴"]] },
+  { id: "food", kn: "ಊಟ", en: "Food", words: [["ಅನ್ನ", "anna", "rice", "🍚"], ["ದೋಸೆ", "dose", "dosa", "🫓"], ["ಹಾಲು", "haalu", "milk", "🥛"], ["ನೀರು", "neeru", "water", "💧"], ["ಮೊಸರು", "mosaru", "curd", "🥣"], ["ಬಾಳೆಹಣ್ಣು", "baaLehaNNu", "banana", "🍌"]] },
+  { id: "colours", kn: "ಬಣ್ಣಗಳು", en: "Colours", words: [["ಕೆಂಪು", "kempu", "red", "🟥"], ["ಹಸಿರು", "hasiru", "green", "🟩"], ["ಹಳದಿ", "haLadi", "yellow", "🟨"], ["ನೀಲಿ", "neeli", "blue", "🟦"], ["ಬಿಳಿ", "biLi", "white", "⬜"], ["ಕಪ್ಪು", "kappu", "black", "⬛"]] },
+  { id: "animals", kn: "ಪ್ರಾಣಿಗಳು", en: "Animals", words: [["ಹಸು", "hasu", "cow", "🐄"], ["ನಾಯಿ", "naayi", "dog", "🐕"], ["ಬೆಕ್ಕು", "bekku", "cat", "🐈"], ["ಆನೆ", "aane", "elephant", "🐘"], ["ಕೋತಿ", "kooti", "monkey", "🐒"], ["ಹುಲಿ", "huli", "tiger", "🐅"]] },
+  { id: "body", kn: "ನನ್ನ ದೇಹ", en: "My body", words: [["ಕಣ್ಣು", "kaNNu", "eye", "👁️"], ["ಕಿವಿ", "kivi", "ear", "👂"], ["ಮೂಗು", "moogu", "nose", "👃"], ["ಬಾಯಿ", "baayi", "mouth", "👄"], ["ಕೈ", "kai", "hand", "✋"], ["ಕಾಲು", "kaalu", "leg", "🦵"]] },
+  { id: "home", kn: "ಮನೆ", en: "Home", words: [["ಮನೆ", "mane", "house", "🏠"], ["ಬಾಗಿಲು", "baagilu", "door", "🚪"], ["ಕಿಟಕಿ", "kiTaki", "window", "🪟"], ["ಕುರ್ಚಿ", "kurchi", "chair", "🪑"], ["ಹಾಸಿಗೆ", "haasige", "bed", "🛏️"], ["ದೀಪ", "deepa", "lamp", "🪔"]] },
+  { id: "school", kn: "ಶಾಲೆ", en: "School", words: [["ಶಾಲೆ", "shaale", "school", "🏫"], ["ಪುಸ್ತಕ", "pustaka", "book", "📖"], ["ಚೀಲ", "cheela", "bag", "🎒"], ["ಪೆನ್ಸಿಲ್", "pensil", "pencil", "✏️"], ["ಗೆಳೆಯ", "geLeya", "friend", "🧒"], ["ಗಡಿಯಾರ", "gaDiyaara", "clock", "🕰️"]] },
+  { id: "fruits", kn: "ಹಣ್ಣುಗಳು", en: "Fruits", words: [["ಮಾವು", "maavu", "mango", "🥭"], ["ಸೇಬು", "seebu", "apple", "🍎"], ["ದ್ರಾಕ್ಷಿ", "draakshi", "grapes", "🍇"], ["ಕಿತ್ತಳೆ", "kittaLe", "orange", "🍊"], ["ಅನಾನಸ್", "anaanas", "pineapple", "🍍"], ["ಕಲ್ಲಂಗಡಿ", "kallangaDi", "watermelon", "🍉"]] },
+  { id: "vegetables", kn: "ತರಕಾರಿ", en: "Vegetables", words: [["ಈರುಳ್ಳಿ", "eeruLLi", "onion", "🧅"], ["ಟೊಮೆಟೊ", "Tomato", "tomato", "🍅"], ["ಬದನೆಕಾಯಿ", "badanekaayi", "brinjal", "🍆"], ["ಆಲೂಗಡ್ಡೆ", "aaloogaDDe", "potato", "🥔"], ["ಕ್ಯಾರೆಟ್", "kyaareT", "carrot", "🥕"], ["ಮೆಣಸಿನಕಾಯಿ", "meNasinakaayi", "chilli", "🌶️"]] },
+  { id: "festivals", kn: "ಹಬ್ಬ", en: "Festivals", words: [["ದೀಪ", "deepa", "lamp", "🪔"], ["ಹೂವು", "hoovu", "flower", "🌼"], ["ಸಿಹಿ", "sihi", "sweet", "🍬"], ["ರಂಗೋಲಿ", "rangoli", "rangoli", "🎨"], ["ಪಟಾಕಿ", "paTaaki", "crackers", "🎆"], ["ಉಡುಗೊರೆ", "uDugore", "gift", "🎁"]] },
+  { id: "weather", kn: "ಹವಾಮಾನ", en: "Weather", words: [["ಮಳೆ", "maLe", "rain", "🌧️"], ["ಬಿಸಿಲು", "bisilu", "sunshine", "☀️"], ["ಗಾಳಿ", "gaaLi", "wind", "🌬️"], ["ಮೋಡ", "mooDa", "cloud", "☁️"], ["ಚಳಿ", "chaLi", "cold", "🥶"], ["ಹಿಮ", "hima", "snow", "❄️"]] },
+  { id: "clothes", kn: "ಬಟ್ಟೆ", en: "Clothes", words: [["ಅಂಗಿ", "angi", "shirt", "👕"], ["ಲಂಗ", "langa", "skirt", "👗"], ["ಟೋಪಿ", "Topi", "cap", "🧢"], ["ಚಪ್ಪಲಿ", "chappali", "sandals", "🩴"], ["ಕಾಲುಚೀಲ", "kaalucheela", "socks", "🧦"], ["ಕನ್ನಡಕ", "kannaDaka", "spectacles", "👓"]] },
+  { id: "vehicles", kn: "ವಾಹನಗಳು", en: "Getting around", words: [["ಬಸ್ಸು", "bassu", "bus", "🚌"], ["ಕಾರು", "kaaru", "car", "🚗"], ["ರೈಲು", "railu", "train", "🚆"], ["ಸೈಕಲ್", "saikal", "bicycle", "🚲"], ["ದೋಣಿ", "dooNi", "boat", "⛵"], ["ವಿಮಾನ", "vimaana", "aeroplane", "✈️"]] },
+  { id: "numbers", kn: "ಸಂಖ್ಯೆಗಳು", en: "Numbers", words: [["ಒಂದು", "ondu", "one", "1️⃣"], ["ಎರಡು", "eraDu", "two", "2️⃣"], ["ಮೂರು", "mooru", "three", "3️⃣"], ["ನಾಲ್ಕು", "naalku", "four", "4️⃣"], ["ಐದು", "aidu", "five", "5️⃣"], ["ಹತ್ತು", "hattu", "ten", "🔟"]] },
+  { id: "birds", kn: "ಹಕ್ಕಿಗಳು", en: "Birds", words: [["ಕಾಗೆ", "kaage", "crow", "🐦‍⬛"], ["ಗಿಳಿ", "giLi", "parrot", "🦜"], ["ನವಿಲು", "navilu", "peacock", "🦚"], ["ಕೋಳಿ", "kooLi", "hen", "🐔"], ["ಬಾತುಕೋಳಿ", "baatukooLi", "duck", "🦆"], ["ಗೂಬೆ", "goobe", "owl", "🦉"]] },
+  { id: "kitchen", kn: "ಅಡುಗೆಮನೆ", en: "Kitchen", words: [["ತಟ್ಟೆ", "taTTe", "plate", "🍽️"], ["ಲೋಟ", "looTa", "tumbler", "🥛"], ["ಚಮಚ", "chamacha", "spoon", "🥄"], ["ಪಾತ್ರೆ", "paatre", "vessel", "🍲"], ["ಚಾಕು", "chaaku", "knife", "🔪"], ["ಬಟ್ಟಲು", "baTTalu", "bowl", "🥣"]] },
+  { id: "play", kn: "ಆಟ", en: "Play", words: [["ಚೆಂಡು", "cheNDu", "ball", "⚽"], ["ಗೊಂಬೆ", "gombe", "doll", "🧸"], ["ಗಾಳಿಪಟ", "gaaLipaTa", "kite", "🪁"], ["ಓಡು", "ooDu", "run", "🏃"], ["ಆಡು", "aaDu", "play", "🤹"], ["ಈಜು", "iiju", "swim", "🏊"]] },
+  { id: "feelings", kn: "ಭಾವನೆಗಳು", en: "Feelings", words: [["ಖುಷಿ", "khushi", "happy", "😊"], ["ದುಃಖ", "duhkha", "sad", "😢"], ["ಕೋಪ", "koopa", "angry", "😠"], ["ಭಯ", "bhaya", "scared", "😨"], ["ಸುಸ್ತು", "sustu", "tired", "😴"], ["ಹಸಿವು", "hasivu", "hungry", "🤤"]] },
+];
+
+// A question for each theme; Gini also shows pictures and asks "What is this?"
+export const THEME_TALK = {
+  family: ["ಇವರು ಯಾರು?", "Who is this?", "ಇವರು ನನ್ನ ___.", "This is my ___."],
+  food: ["ನಿನಗೆ ಯಾವ ಊಟ ಇಷ್ಟ?", "Which food do you like?", "ನನಗೆ ___ ಇಷ್ಟ.", "I like ___."],
+  colours: ["ಇದು ಯಾವ ಬಣ್ಣ?", "What colour is this?", "ಇದು ___ ಬಣ್ಣ.", "This is ___."],
+  animals: ["ನಿನಗೆ ಯಾವ ಪ್ರಾಣಿ ಇಷ್ಟ?", "Which animal do you like?", "ನನಗೆ ___ ಇಷ್ಟ.", "I like the ___."],
+  body: ["ಇದು ಏನು? (point to your nose, ears...)", "What is this?", "ಇದು ನನ್ನ ___.", "This is my ___."],
+  home: ["ನಿನ್ನ ಕೋಣೆಯಲ್ಲಿ ಏನು ಇದೆ?", "What is in your room?", "ನನ್ನ ಕೋಣೆಯಲ್ಲಿ ___ ಇದೆ.", "There is a ___ in my room."],
+  school: ["ನಿನ್ನ ಚೀಲದಲ್ಲಿ ಏನು ಇದೆ?", "What is in your bag?", "ನನ್ನ ಚೀಲದಲ್ಲಿ ___ ಇದೆ.", "There is a ___ in my bag."],
+  fruits: ["ನಿನಗೆ ಯಾವ ಹಣ್ಣು ಇಷ್ಟ?", "Which fruit do you like?", "ನನಗೆ ___ ಇಷ್ಟ.", "I like ___."],
+  vegetables: ["ಇವತ್ತು ಯಾವ ತರಕಾರಿ ತಿಂದೆ?", "Which vegetable did you eat today?", "ಇವತ್ತು ನಾನು ___ ತಿಂದೆ.", "Today I ate ___."],
+  festivals: ["ಹಬ್ಬದಲ್ಲಿ ಏನು ಇರುತ್ತದೆ?", "What is there at a festival?", "ಹಬ್ಬದಲ್ಲಿ ___ ಇರುತ್ತದೆ.", "At a festival there is ___."],
+  weather: ["ಇವತ್ತು ಹವಾಮಾನ ಹೇಗಿದೆ?", "What's the weather like today?", "ಇವತ್ತು ___ ಇದೆ.", "Today it is ___."],
+  clothes: ["ನೀನು ಇವತ್ತು ಏನು ಹಾಕಿಕೊಂಡಿದ್ದೀಯ?", "What are you wearing today?", "ನಾನು ___ ಹಾಕಿಕೊಂಡಿದ್ದೇನೆ.", "I am wearing ___."],
+  vehicles: ["ನೀನು ಶಾಲೆಗೆ ಹೇಗೆ ಹೋಗುತ್ತೀಯ?", "How do you go to school?", "ನಾನು ___ನಲ್ಲಿ ಹೋಗುತ್ತೇನೆ.", "I go by ___."],
+  numbers: ["ನಿನಗೆ ಎಷ್ಟು ವರ್ಷ?", "How old are you?", "ನನಗೆ ___ ವರ್ಷ.", "I am ___."],
+  birds: ["ನಿನಗೆ ಯಾವ ಹಕ್ಕಿ ಇಷ್ಟ?", "Which bird do you like?", "ನನಗೆ ___ ಇಷ್ಟ.", "I like the ___."],
+  kitchen: ["ಅಡುಗೆಮನೆಯಲ್ಲಿ ಏನು ಇದೆ?", "What is in the kitchen?", "ಅಡುಗೆಮನೆಯಲ್ಲಿ ___ ಇದೆ.", "There is a ___ in the kitchen."],
+  play: ["ನಿನಗೆ ಯಾವ ಆಟ ಇಷ್ಟ?", "Which game do you like?", "ನನಗೆ ___ ಇಷ್ಟ.", "I like ___."],
+  feelings: ["ನಿನಗೆ ಈಗ ಹೇಗೆ ಅನಿಸುತ್ತಿದೆ?", "How do you feel now?", "ನನಗೆ ___ ಆಗಿದೆ.", "I feel ___."],
+};
+export const themeFor = (n) => THEMES[(Math.max(1, n) - 1) % THEMES.length];
+// "What is this?" questions from pictures in a theme.
+const PIC_Q = {
+  colours: ["ಇದು ಯಾವ ಬಣ್ಣ?", "What colour is this?", (w) => `ಇದು ${w} ಬಣ್ಣ.`],
+  numbers: ["ಇದು ಯಾವ ಸಂಖ್ಯೆ?", "What number is this?", (w) => `ಇದು ${w}.`],
+  family: ["ಇವರು ಯಾರು?", "Who is this?", (w) => `ಇವರು ${w}.`],
+};
+const NO_PIC_Q = ["feelings", "weather", "play"]; // pictures of feelings and actions don't make "What is this?" questions
+export const pictureTalk = (theme, count = 2, seed = 1) => {
+  if (!theme || NO_PIC_Q.includes(theme.id)) return [];
+  const [q, qEn, a] = PIC_Q[theme.id] || ["ಇದು ಏನು?", "What is this?", (w) => `ಇದು ${w}.`];
+  return shuffleSeed(theme.words, seed).slice(0, count).map((w) => ({ q, qEn, pic: w[3], a: a(w[0]), aEn: `This is: ${w[2]}.`, daily: true }));
+};
+export const themeTalk = (theme) => { const t = THEME_TALK[theme.id]; return t ? { q: t[0], qEn: t[1], a: t[2], aEn: t[3], daily: false, hints: theme.words } : null; };
+
+// ---------- Levels: one simple ladder over path, letter pace and tracing style ----------
+// Families and children can move up (or back) any time, to explore harder work.
+export const LEVELS = [
+  { n: 1, en: "Little learners", kn: "ಪುಟಾಣಿ", ages: "about 5 to 6", icon: "🐣", track: "start", pace: "gentle", easy: true, what: "Dot-to-dot letters, a few a week. Short, everyday sentences to hear, say and build." },
+  { n: 2, en: "Explorers", kn: "ಅನ್ವೇಷಕರು", ages: "about 6 to 8", icon: "🐦", track: "start", pace: "steady", easy: false, what: "The whole alphabet in 6 weeks, checked on shape and stroke order. Short sentences, lots of talking." },
+  { n: 3, en: "Speakers to writers", kn: "ಬರಹಗಾರರು", ages: "about 7 to 10", icon: "🦜", track: "write", pace: "steady", easy: false, what: "Sentences move faster: write what you say, make sentences longer, dictation." },
+  { n: 4, en: "Big writers", kn: "ದೊಡ್ಡ ಬರಹಗಾರರು", ages: "about 9 to 12", icon: "🦚", track: "long", pace: "review", easy: false, what: "A story every week: read it aloud, answer questions, dictation, retell it, then write your own story. Long sentences and paragraphs." },
+];
+export function levelOf(child) {
+  if (child && LEVELS[child.level - 1]) return child.level;
+  const t = trackOf(child), p = paceOf(child);
+  return t === "long" ? 4 : t === "write" ? 3 : p === "gentle" ? 1 : 2;
+}
+export const levelFromPlacement = (pl) => (pl.track === "long" ? 4 : pl.track === "write" ? 3 : pl.pace === "gentle" ? 1 : 2);
+export const levelPatch = (n) => { const L = LEVELS[n - 1]; return { level: n, track: L.track, pace: L.pace, easyTrace: L.easy }; };

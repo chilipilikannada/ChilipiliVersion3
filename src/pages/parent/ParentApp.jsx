@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import ProgramPlan from "../../components/ProgramPlan.jsx";
+import BrandName from "../../components/BrandName.jsx";
 import { Home, BookOpen, CalendarHeart, MessageCircle, User, Sparkles, ChevronDown, LogOut } from "lucide-react";
 import { useApp, useWatch, useVoiceLib, useStrokeLib, usePacketFiles, firstName } from "../../lib/hooks.js";
 import { store } from "../../lib/store/index.js";
@@ -11,6 +13,7 @@ import Meets from "./Meets.jsx";
 import Messages from "./Messages.jsx";
 import ChildPage from "./Child.jsx";
 import KidSpace from "../kid/KidSpace.jsx";
+import { isAdult, UNITS } from "../../lib/adult.js";
 
 const TABS = [
   ["home", "Home", Home],
@@ -51,14 +54,16 @@ export default function ParentApp() {
   const unreadTeacher = messages.filter((m) => m.childId === child.id && m.fromRole !== "parent" && m.at > (Number(localStorage.getItem("chilipili-read-" + child.id)) || 0)).length;
   const badges = { messages: unreadTeacher };
 
-  const Page = { home: HomePage, packets: Packets, meets: Meets, messages: Messages, child: ChildPage }[tab] || HomePage;
+  const adult = isAdult(child);
+  const tabs = adult ? TABS.filter(([k]) => k !== "packets") : TABS;
+  const Page = { plan: PlanPage, home: HomePage, packets: Packets, meets: Meets, messages: Messages, child: ChildPage }[tab] || HomePage;
   return (
     <div className="shell">
       <header className="appbar">
         <div className="appbar-in">
-          <button className="brand" onClick={() => go("home")}><Logo /><span className="hide-s">Chili Pili<small>ಚಿಲಿಪಿಲಿ</small></span></button>
+          <button className="brand" onClick={() => go("home")}><Logo /><BrandName light /></button>
           <span className="spacer" />
-          <button className="child-switch" onClick={() => setPicker(true)} aria-label="Switch child">
+          <button className="child-switch" onClick={() => setPicker(true)} aria-label="Switch learner">
             <Avatar name={child.name} size="sm" /> {firstName(child.name)} <ChevronDown size={16} />
           </button>
         </div>
@@ -66,29 +71,42 @@ export default function ParentApp() {
       </header>
       <div className="body">
         <nav className="sidenav" aria-label="Sections">
-          {TABS.map(([k, l, I]) => <button key={k} aria-current={tab === k ? "page" : undefined} onClick={() => go(k)}><I />{l}{badges[k] ? <span className="badge">{badges[k]}</span> : null}</button>)}
-          <button className="btn yellow kid-cta" onClick={() => go("kid")}><Sparkles size={18} /> {firstName(child.name)}'s space</button>
+          {tabs.map(([k, l, I]) => <button key={k} aria-current={tab === k ? "page" : undefined} onClick={() => go(k)}><I />{l}{badges[k] ? <span className="badge">{badges[k]}</span> : null}</button>)}
+          <button className="btn yellow kid-cta" onClick={() => go("kid")}><Sparkles size={18} /> {adult ? "My lessons" : `${firstName(child.name)}'s space`}</button>
         </nav>
         <main className="main"><Page fam={fam} /></main>
       </div>
       <nav className="bottomnav" aria-label="Sections">
-        {TABS.map(([k, l, I]) => <button key={k} aria-current={tab === k ? "page" : undefined} onClick={() => go(k)}><I />{l}{badges[k] ? <span className="badge">{badges[k]}</span> : null}</button>)}
+        {tabs.map(([k, l, I]) => <button key={k} aria-current={tab === k ? "page" : undefined} onClick={() => go(k)}><I />{l}{badges[k] ? <span className="badge">{badges[k]}</span> : null}</button>)}
       </nav>
       {picker && (
-        <Modal title="Your children" onClose={() => setPicker(false)}>
+        <Modal title="Who's learning" onClose={() => setPicker(false)}>
           <ul className="list">
             {kids.map((k) => (
               <li key={k.id}>
                 <Avatar name={k.name} />
-                <div className="grow"><b>{k.name}</b><div className="sub">{k.status === "active" ? k.group : "Waiting for the teacher"}</div></div>
+                <div className="grow"><b>{k.name}</b><div className="sub">{isAdult(k) ? "Me · grown-up lessons" : k.status === "active" ? k.group : "Waiting for the teacher"}{isAdult(k) && k.status !== "active" ? " · waiting for the teacher" : ""}</div></div>
                 <button className="btn small ghost" onClick={() => { setSel(k.id); setPicker(false); }}>{k.id === child.id ? "Selected" : "Switch"}</button>
               </li>
             ))}
           </ul>
-          <button className="btn ghost" onClick={() => { setPicker(false); go("add"); }}>Add another child</button>
+          <button className="btn ghost" onClick={() => { setPicker(false); go("add"); }}>Add a learner (a child, or me)</button>
           <button className="btn quiet" onClick={() => store.signOut()}><LogOut size={18} /> Sign out ({profile.email})</button>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// The whole six months for the selected learner.
+function PlanPage({ fam }) {
+  const { go } = useApp();
+  const { child } = fam;
+  const adult = isAdult(child);
+  return (
+    <div className="stack">
+      <div className="page-title"><h1>{adult ? "My course" : `${firstName(child.name)}'s 6-month plan`}</h1><p className="muted" style={{ margin: 0 }}>Everything in the program, week by week. ✓ done · ★ this week.</p></div>
+      <ProgramPlan child={child} onLesson={adult ? (u) => go("kid", "unit", String(UNITS.indexOf(u) + 1)) : undefined} />
     </div>
   );
 }

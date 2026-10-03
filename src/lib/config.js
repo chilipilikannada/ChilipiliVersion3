@@ -15,8 +15,8 @@ export const hasFirebase = Boolean(firebaseConfig.apiKey && firebaseConfig.proje
 
 // Defaults the teacher can change in Settings (stored in the database).
 export const DEFAULT_SCHOOL = {
-  schoolName: "Chili Pili",
-  tagline: "Kannada at home, at your child's own pace",
+  schoolName: "Chili Pili Kannada Kali",
+  tagline: "Kannada at home, at your own pace",
   timeZone: "America/Chicago",
   tzLabel: "CT",
   groups: ["Saturday group"],

@@ -4,6 +4,7 @@ import { STAGES, SKILLS, SKILL, CAN_DO } from "../lib/content.js";
 import { STAGE_EMOJI } from "./Art.jsx";
 import { initials, colorFor, useUrl } from "../lib/hooks.js";
 import { useRecorder, canRecord } from "../lib/audio.js";
+import MicHelp from "./MicHelp.jsx";
 
 export function Btn({ kind = "primary", size, block, icon: Icon, children, onClick, busyText, type = "button", ...rest }) {
   const [busy, setBusy] = useState(false);
@@ -122,7 +123,7 @@ export function VoiceRecorder({ onDone, maxSeconds = 60, compact }) {
         <Btn kind="ghost" icon={Mic} onClick={() => file.current.click()}>Record voice note</Btn>
       )}
       <input ref={file} type="file" accept="audio/*" capture="user" hidden onChange={(e) => { r.useFile(e.target.files[0]); e.target.value = ""; }} />
-      {r.error === "denied" && <span className="tiny muted">Allow the microphone in your browser settings to record.</span>}
+      {r.error && r.error !== "unsupported" && <MicHelp error={r.error} onRetry={() => { r.reset(); r.start(); }} />}
     </div>
   );
 }

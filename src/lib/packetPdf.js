@@ -1,8 +1,9 @@
 // The printable packet as a real PDF (US Letter). Pages are drawn on a canvas, which shapes
 // Kannada correctly, then placed into a PDF with pdf-lib.
-import { ensureFont, layout, drawGlyph, fitRecord, PAD_FONT } from "./strokes.js";
+import { ensureFont, layout, drawGlyph, fitRecord, centreDots, PAD_FONT } from "./strokes.js";
 import { TRACKS, KAG_GRID_CONS, LETTER_WORD, SOUND, tiles } from "./course.js";
 import { voiceKey } from "./audio.js";
+import { storyFor } from "./stories.js";
 
 const PW = 1275, PH = 1650, M = 80; // 150 dpi, margins
 const RED = "#c8102e", DEEP = "#8a0d1f", YEL = "#ffc72c", INK = "#2a0f0c", MUTE = "#7b5b52", LINE = "#d9c7a0", GHOST = "#d7d0c2";
@@ -61,15 +62,19 @@ function lines(p, count, h = 70) {
 }
 
 // One tracing row: model (with the teacher's start dots), ghost letters, dotted outlines, empty boxes.
-function traceRow(p, text, rec) {
+function traceRow(p, text, rec, easy = false) {
   const { g } = p;
   const L = layout(text);
   const avail = PW - 2 * M, gap = 12;
-  const cols = [...text].length <= 3 ? 8 : L.aspect > 2 ? 3 : 4;
+  const cols = [...text].length <= 3 ? (easy ? 6 : 8) : L.aspect > 2 ? 3 : 4;
   const bw = (avail - gap * (cols - 1)) / cols;
-  const bh = cols === 8 ? bw : Math.min(bw / L.aspect, 140);
+  const bh = cols >= 6 ? bw : Math.min(bw / L.aspect, 140);
   const H = Math.min(bw / L.aspect, bh);
-  const kinds = cols === 8 ? ["model", "ghost", "ghost", "ghost", "dash", "dash", "empty", "empty"] : cols === 4 ? ["model", "ghost", "dash", "empty"] : ["model", "ghost", "empty"];
+  const kinds = cols === 6 ? ["model", "dots", "dots", "dots", "ghost", "empty"]
+    : cols === 8 ? ["model", "ghost", "ghost", "dots", "dots", "empty", "empty", "empty"]
+    : cols === 4 ? ["model", "dots", "ghost", "empty"] : ["model", "dots", "empty"];
+  const recFit = rec ? fitRecord(rec, L) : null;
+  const dots = centreDots(L, recFit, 0.06);
   kinds.forEach((k, i) => {
     const x = M + i * (bw + gap), ox = x + (bw - H * L.aspect) / 2, y = p.y, oy = y + (bh - H) / 2;
     g.fillStyle = k === "model" ? "#fff4cf" : "#fff"; roundRect(g, x, y, bw, bh, 12); g.fill();
@@ -85,7 +90,13 @@ function traceRow(p, text, rec) {
       });
     }
     if (k === "ghost") drawGlyph(g, L, H, { fill: GHOST, ox, oy });
-    if (k === "dash") drawGlyph(g, L, H, { stroke: "#b8ab92", dash: [5, 6], width: 2.2, ox, oy });
+    if (k === "dots") {
+      drawGlyph(g, L, H, { fill: "#f3efe6", ox, oy });
+      g.fillStyle = "#8f8676";
+      for (const d of dots) { g.beginPath(); g.arc(ox + d.x * H, oy + d.y * H, Math.max(2.4, H * (easy ? 0.028 : 0.022)), 0, Math.PI * 2); g.fill(); }
+      const f = dots.find((d) => d.first) || dots[0];
+      if (f) { g.fillStyle = "#1f8a4c"; g.beginPath(); g.arc(ox + f.x * H, oy + f.y * H, Math.max(4, H * 0.04), 0, Math.PI * 2); g.fill(); }
+    }
   });
   p.y += bh + 10;
   const word = LETTER_WORD[text];
@@ -126,7 +137,25 @@ function wordTiles(p, words) {
 
 const room = (p, need) => p.y + need < PH - 110;
 
-export async function packetPdf({ child, pk, strokeLib = {}, school }) {
+// "Find and circle": a grid of letters with this week's letters mixed in.
+function findPage(p, targets, pool, seed) {
+  const { g } = p;
+  const cols = 8, rows = 6, cw = (PW - 2 * M) / cols, ch = 104;
+  const colours = ["red", "blue", "green", "orange"];
+  g.fillStyle = INK; g.font = EN(24, 700);
+  g.fillText(targets.slice(0, 4).map((t, i) => `${t} = ${colours[i]}`).join("     "), M + 4, p.y + 6);
+  p.y += 30;
+  let s = seed || 7; const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+  const others = pool.filter((x) => !targets.includes(x));
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const t = rnd() < 0.45 ? targets[Math.floor(rnd() * Math.min(4, targets.length))] : others[Math.floor(rnd() * others.length)] || targets[0];
+    g.fillStyle = INK; g.font = KN(52); g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(t, M + c * cw + cw / 2, p.y + r * ch + ch / 2); g.textAlign = "left"; g.textBaseline = "alphabetic";
+  }
+  p.y += rows * ch + 10;
+}
+
+export async function packetPdf({ child, pk, strokeLib = {}, school, easy = false }) {
   await ensureFont();
   try { await document.fonts.load(EN(20)); } catch {}
   const { PDFDocument } = await import("pdf-lib");
@@ -136,13 +165,13 @@ export async function packetPdf({ child, pk, strokeLib = {}, school }) {
 
   // ---- Page: letters ----
   const items = [...(U.items || [])];
-  const perPage = 6;
+  const perPage = easy ? 5 : 6;
   for (let s = 0; s < Math.max(1, items.length); s += perPage) {
     const p = newPage(); pages.push(p);
     p.meta = { title: `Letters: ${U.en}`, sub: `${T.icon} ${T.en} path · trace the light letters, then write on your own. Start at the green dot.` };
     p.y = 290;
     section(p, s === 0 ? "1  Trace and write" : "1  Trace and write (continued)");
-    for (const t of items.slice(s, s + perPage)) { if (!room(p, 190)) break; traceRow(p, t, strokeLib[voiceKey(t)]); }
+    for (const t of items.slice(s, s + perPage)) { if (!room(p, easy ? 240 : 190)) break; traceRow(p, t, strokeLib[voiceKey(t)], easy); }
     if (U.tip && room(p, 60)) { p.g.fillStyle = INK; p.g.font = EN(22, 600); p.y = wrap(p.g, `Tip: ${U.tip}`, M, p.y + 10, PW - 2 * M, 30); }
     if (s + perPage >= items.length && U.kind === "signs" && room(p, 300)) { section(p, "2  Fill in the vowel-sign grid"); kagGrid(p, U.signs); }
   }
@@ -153,6 +182,44 @@ export async function packetPdf({ child, pk, strokeLib = {}, school }) {
   if (U.words && U.words.length) {
     const last = pages[pages.length - 1];
     if (room(last, 260)) { section(last, "Words to write"); for (const w of U.words.slice(0, 2)) traceRow(last, w, strokeLib[voiceKey(w)]); }
+  }
+
+  // ---- Page: find the letters, and a second tracing round (more practice for the week) ----
+  if (U.kind === "letters" || easy) {
+    const p = newPage(); pages.push(p);
+    p.meta = { title: "Find and practise", sub: "A little every day: colour the letters you find, then trace them once more." };
+    p.y = 290;
+    const targets = (U.items || []).filter((t) => [...t].length <= 2);
+    if (targets.length) {
+      section(p, "Find and circle each letter in its colour");
+      const pool = ["ಅ", "ಆ", "ಇ", "ಈ", "ಉ", "ಊ", "ಎ", "ಏ", "ಒ", "ಓ", "ಕ", "ಗ", "ಚ", "ಜ", "ಟ", "ಡ", "ತ", "ದ", "ನ", "ಪ", "ಬ", "ಮ", "ಯ", "ರ", "ಲ", "ವ", "ಸ", "ಹ", "ಳ"];
+      findPage(p, targets.slice(0, 4), pool, pk.week * 13 + 5);
+    }
+    section(p, "Trace again, then write from memory");
+    for (const t of (U.items || []).slice(0, 3)) { if (!room(p, 240)) break; traceRow(p, t, strokeLib[voiceKey(t)], true); }
+  }
+
+  // ---- Page: words of the week (picture, word, trace, copy) ----
+  if (pk.theme) {
+    const p = newPage(); pages.push(p);
+    p.meta = { title: `Words of the week: ${pk.theme.en}`, sub: `${pk.theme.kn} · say each word, trace it, then write it on the line.` };
+    p.y = 290;
+    const g = p.g;
+    section(p, "Look, say, trace and write");
+    const rowH = 190;
+    for (const [kn, rom, en, pic] of pk.theme.words.slice(0, 6)) {
+      if (!room(p, rowH)) break;
+      const y = p.y;
+      g.strokeStyle = LINE; g.lineWidth = 2; roundRect(g, M, y, PW - 2 * M, rowH - 16, 16); g.stroke();
+      g.font = `110px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`; g.textBaseline = "middle"; g.textAlign = "center";
+      g.fillStyle = INK; g.fillText(pic, M + 90, y + (rowH - 16) / 2 + 4); g.textAlign = "left";
+      g.font = KN(58); g.fillStyle = DEEP; g.fillText(kn, M + 190, y + 62);
+      g.font = KN(58); g.fillStyle = "#e3dccd"; g.fillText(kn, M + 190 + Math.max(260, g.measureText(kn).width + 60), y + 62);
+      g.textBaseline = "alphabetic"; g.fillStyle = MUTE; g.font = EN(22, 700); g.fillText(`${rom} · ${en}`, M + 190, y + 128);
+      g.strokeStyle = LINE; g.beginPath(); g.moveTo(M + 700, y + 140); g.lineTo(PW - M - 24, y + 140); g.stroke();
+      g.setLineDash([6, 6]); g.strokeStyle = "#eadcb8"; g.beginPath(); g.moveTo(M + 700, y + 100); g.lineTo(PW - M - 24, y + 100); g.stroke(); g.setLineDash([]);
+      p.y += rowH;
+    }
   }
 
   // ---- Page: sentences ----
@@ -219,6 +286,33 @@ export async function packetPdf({ child, pk, strokeLib = {}, school }) {
     }
   }
 
+  // ---- Big writers: the week's story, questions and your own story ----
+  if (track === "long") {
+    const st = storyFor(pk.n);
+    const p = newPage(); pages.push(p);
+    p.meta = { title: `Story: ${st.en}`, sub: `${st.kn} · read it aloud twice, answer, then write your own.` };
+    p.y = 290;
+    const g = p.g;
+    section(p, "Read the story aloud");
+    g.fillStyle = INK; g.font = KN(30);
+    for (const l of st.lines) { if (!room(p, 50)) break; p.y = wrap(g, l, M + 8, p.y + 30, PW - 2 * M - 16, 44) - 14; }
+    p.y += 20;
+    section(p, "Answer in full sentences");
+    st.q.forEach(([q], i) => {
+      if (!room(p, 150)) return;
+      g.fillStyle = INK; g.font = KN(28); g.fillText(`${i + 1}. ${q}`, M + 8, p.y + 24); p.y += 36;
+      lines(p, 1, 58);
+    });
+    const p2 = newPage(); pages.push(p2);
+    p2.meta = { title: "Write your own story", sub: st.write };
+    p2.y = 290;
+    section(p2, "Words you can use");
+    wordTiles(p2, [...st.bank, ...st.words.map((w) => w[0])]);
+    section(p2, "My story");
+    p2.g.fillStyle = INK; p2.g.font = EN(22, 700); p2.g.fillText("Title: ________________________________", M + 4, p2.y + 20); p2.y += 44;
+    lines(p2, Math.floor((PH - 130 - p2.y) / 76), 60);
+  }
+
   // ---- Grown-ups' page ----
   {
     const p = newPage(); pages.push(p);
@@ -254,7 +348,7 @@ export async function packetPdf({ child, pk, strokeLib = {}, school }) {
   doc.setAuthor(school || "Chili Pili");
   pages.forEach((p, i) => {
     header(p, { ...meta, ...p.meta, page: i + 1, pages: pages.length });
-    footer(p, i === pages.length - 1 ? "Chili Pili · ಚಿಲಿಪಿಲಿ ಕನ್ನಡ" : "Trace slowly and say each sound. Then hand in a photo from the app.");
+    footer(p, i === pages.length - 1 ? "Chili Pili · ಚಿಲಿಪಿಲಿ ಕನ್ನಡ" : "Trace slowly and say each sound. Snap a photo in the app whenever a page is done.");
   });
   for (const p of pages) {
     const url = p.c.toDataURL("image/jpeg", 0.86);

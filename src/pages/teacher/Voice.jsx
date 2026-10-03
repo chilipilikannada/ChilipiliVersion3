@@ -4,15 +4,17 @@ import { useApp } from "../../lib/hooks.js";
 import { store } from "../../lib/store/index.js";
 import { Btn } from "../../components/ui.jsx";
 import { ALPHABET } from "../../lib/content.js";
-import { PATTERNS, PROJECTS } from "../../lib/course.js";
+import { PATTERNS, PROJECTS, TALK, DAILY_TALK, THEMES, THEME_TALK } from "../../lib/course.js";
 import { voiceKey, useRecorder, canRecord, playWord, playUrl, audioExt } from "../../lib/audio.js";
 import { friendlyError } from "../../App.jsx";
 
 // The teacher records each word once; children hear this voice in Listen, Play and Speak.
 export default function Voice({ data }) {
-  const { voiceLib } = data;
-  const [sel, setSel] = useState(0);
+  const { voiceLib, phrases = [], children = [] } = data;
+  const [sel, setSel] = useState(2);
   const sets = useMemo(() => [
+    { title: "Children's phrases", kn: "ಮಕ್ಕಳ ಮಾತು", items: phrases.sort((a, b) => b.at - a.at).filter((p, i, a) => a.findIndex((q) => q.kn === p.kn) === i).slice(0, 40).map((p) => ({ text: p.kn, rom: p.roman, en: `${p.en}${(children.find((c) => c.id === p.childId) || {}).name ? ` · asked by ${(children.find((c) => c.id === p.childId) || {}).name.split(" ")[0]}` : ""}`, pic: "🗣️" })) },
+    { title: "Gini's questions", kn: "ಪ್ರಶ್ನೆಗಳು", items: [...DAILY_TALK, ...Object.values(THEME_TALK), ...Object.values(TALK).flat(), ["ಇದು ಏನು?", "What is this?"], ["ಇದು ಯಾವ ಬಣ್ಣ?", "What colour is this?"], ["ಇವರು ಯಾರು?", "Who is this?"], ["ಇದು ಯಾವ ಸಂಖ್ಯೆ?", "What number is this?"]].filter((t) => t[0]).filter((t, i, a) => a.findIndex((u) => u[0] === t[0]) === i).map((t) => ({ text: t[0], rom: "", en: t[1], pic: "❓" })) },
     ...[...PATTERNS, ...PROJECTS].map((p, i) => ({
       title: i < PATTERNS.length ? `${i + 1} · ${p.en}` : p.en, kn: p.kn,
       items: [
@@ -22,9 +24,10 @@ export default function Voice({ data }) {
         ...p.ladder.slice(1).map((b) => ({ text: b[0], rom: "", en: b[1], pic: "🪜" })),
       ].filter((x, j, a) => a.findIndex((y) => y.text === x.text) === j),
     })),
+    ...THEMES.map((t, i) => ({ title: `Words ${i + 1} · ${t.en}`, kn: t.kn, items: t.words.map((w) => ({ text: w[0], rom: w[1], en: w[2], pic: w[3] })) })),
     { title: "Vowels", kn: "ಸ್ವರಗಳು", items: ALPHABET.vowels.map(([v, r]) => ({ text: v, rom: r, en: "", pic: "" })) },
     { title: "Consonants", kn: "ವ್ಯಂಜನಗಳು", items: ALPHABET.consonants.flat().map(([v, r]) => ({ text: v, rom: r, en: "", pic: "" })) },
-  ], []);
+  ], [phrases, children]);
   const done = (s) => s.items.filter((x) => voiceLib[voiceKey(x.text)]).length;
   const set = sets[sel];
   return (
@@ -39,7 +42,8 @@ export default function Voice({ data }) {
       </div>
       <div className="card">
         <h3>{set.title} <span className="kn muted" style={{ fontWeight: 400 }}>{set.kn}</span></h3>
-        <ul className="list">{set.items.map((x) => <WordRow key={x.text} x={x} lib={voiceLib} />)}</ul>
+        {set.items.length ? <ul className="list">{set.items.map((x) => <WordRow key={x.text} x={x} lib={voiceLib} />)}</ul>
+          : <p className="muted small">When learners use Talk both ways, what they wanted to say shows up here. Record it in your voice and they hear you next time.</p>}
       </div>
       {!canRecord() && <p className="small muted">This browser can't record directly, so the mic button opens your phone's voice recorder instead.</p>}
     </div>

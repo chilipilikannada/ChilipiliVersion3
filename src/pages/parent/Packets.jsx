@@ -37,7 +37,7 @@ export default function Packets({ fam }) {
                   background: st === "reviewed" || st === "sent" ? "var(--leaf-soft)" : st === "meet" ? "var(--sky-soft)" : "#fff" }}>
                 <b style={{ display: "block", fontSize: 14 }}>Week {n}</b>
                 <span className="tiny" style={{ display: "block", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t ? t.en.replace(/^Project: /, "") : <span className="kn">ಕೂಟ</span>}</span>
-                <span className="tiny muted" style={{ display: "flex", alignItems: "center", gap: 4 }}>{st === "locked" ? <><Lock size={12} /> {fmtDate(weekStart(child, n))}</> : st === "meet" ? "Meet" : st === "reviewed" ? "Reviewed" : st === "sent" ? "Handed in" : st === "now" ? "This week" : "Not handed in"}</span>
+                <span className="tiny muted" style={{ display: "flex", alignItems: "center", gap: 4 }}>{st === "locked" ? <><Lock size={12} /> {fmtDate(weekStart(child, n))}</> : st === "meet" ? "Meet" : st === "reviewed" ? "Reviewed" : st === "sent" ? "Pages sent" : st === "now" ? "This week" : "Open"}</span>
               </button>
             );
           })}

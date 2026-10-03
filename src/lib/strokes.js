@@ -105,7 +105,7 @@ function bboxOf(strokes) {
   return { x0, y0, x1, y1 };
 }
 
-function shapeScore(L, strokes, { free = false } = {}) {
+function shapeScore(L, strokes, { free = false, easy = false } = {}) {
   const G = glyphGrid(L);
   let sx = 1, sy = 1, ox = 0, oy = 0;
   if (free) {
@@ -117,7 +117,7 @@ function shapeScore(L, strokes, { free = false } = {}) {
   }
   const pts = samples(strokes, sx, sy, ox, oy);
   if (!pts.length || !G.n) return { coverage: 0, precision: 0 };
-  const tolP = free ? 4.5 : 3.6, tolC = free ? 5 : 4.5;
+  const tolP = easy ? (free ? 6.5 : 5.5) : free ? 4.5 : 3.6, tolC = easy ? (free ? 7 : 6.5) : free ? 5 : 4.5;
   let good = 0;
   const ink = new Uint8Array(G.W * G.H);
   for (const [x, y] of pts) {
@@ -163,13 +163,20 @@ function orderCheck(model, strokes) {
 }
 
 // The verdict: stars 0..3 and friendly tips.
-export function score(L, strokes, { mode = "trace", model = null } = {}) {
+export function score(L, strokes, { mode = "trace", model = null, easy = false } = {}) {
   const ink = inkLength(strokes);
-  const minInk = 0.35 * Math.max(1, [...L.text].length * 0.6);
+  const minInk = (easy ? 0.25 : 0.35) * Math.max(1, [...L.text].length * 0.6);
   if (ink < minInk) return { stars: 0, coverage: 0, precision: 0, tips: ["Keep going: write the whole letter."], orderOk: true };
   const free = mode === "write";
-  const { coverage, precision } = shapeScore(L, strokes, { free });
-  let stars = coverage >= 0.85 && precision >= 0.85 ? 3 : coverage >= 0.72 && precision >= 0.76 ? 2 : coverage >= 0.5 && precision >= 0.6 ? 1 : 0;
+  const { coverage, precision } = shapeScore(L, strokes, { free, easy });
+  let stars = easy
+    ? (coverage >= 0.75 && precision >= 0.7 ? 3 : coverage >= 0.6 && precision >= 0.6 ? 2 : coverage >= 0.4 && precision >= 0.45 ? 1 : 0)
+    : coverage >= 0.85 && precision >= 0.85 ? 3 : coverage >= 0.72 && precision >= 0.76 ? 2 : coverage >= 0.5 && precision >= 0.6 ? 1 : 0;
+  if (easy) {
+    const tips = [];
+    if (coverage < 0.6) tips.push(free ? "Almost! Look at the letter once more." : "Go over all the dots.");
+    return { stars, coverage, precision, tips, orderOk: true };
+  }
   const tips = [];
   if (coverage < 0.72) tips.push(free ? "Some parts of the letter are missing. Look at the model again." : "Trace over all of the grey letter.");
   if (precision < 0.76) tips.push(free ? "Try to keep the shape closer to the model." : "Stay on the grey lines.");
@@ -199,4 +206,66 @@ export function fitRecord(r, L) {
   if (!r || !r.strokes || !r.strokes.length) return null;
   const k = r.aspect && L.aspect && r.aspect !== L.aspect ? L.aspect / r.aspect : 1;
   return { ...r, strokes: decodeStrokes(r.strokes).map((s) => s.map(([x, y]) => [x * k, y])) };
+}
+
+// ---------- Easy tracing: dots along the middle of each line ----------
+function skeleton(mask, W, H) {
+  const m = Uint8Array.from(mask);
+  const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : m[y * W + x]);
+  let changed = true, guard = 0;
+  while (changed && guard++ < 60) {
+    changed = false;
+    for (const pass of [0, 1]) {
+      const del = [];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (!m[y * W + x]) continue;
+        const P = [at(x, y - 1), at(x + 1, y - 1), at(x + 1, y), at(x + 1, y + 1), at(x, y + 1), at(x - 1, y + 1), at(x - 1, y), at(x - 1, y - 1)];
+        const B = P[0] + P[1] + P[2] + P[3] + P[4] + P[5] + P[6] + P[7]; if (B < 2 || B > 6) continue;
+        let A = 0; for (let k = 0; k < 8; k++) if (!P[k] && P[(k + 1) % 8]) A++; if (A !== 1) continue;
+        if (pass === 0 ? (P[0] * P[2] * P[4] || P[2] * P[4] * P[6]) : (P[0] * P[2] * P[6] || P[0] * P[4] * P[6])) continue;
+        del.push(y * W + x);
+      }
+      if (del.length) { changed = true; for (const i of del) m[i] = 0; }
+    }
+  }
+  return m;
+}
+
+const dotCache = new Map();
+// Dots (in box units) along the centre of the letter, spaced evenly. If the teacher has
+// recorded the letter, the dots follow the teacher's strokes instead (in order).
+export function centreDots(L, model = null, spacing = 0.05) {
+  if (model && model.strokes && model.strokes.length) {
+    const out = [];
+    model.strokes.forEach((s, k) => {
+      let acc = spacing; // always put a dot at the start
+      for (let i = 0; i < s.length; i++) {
+        if (i > 0) acc += Math.hypot(s[i][0] - s[i - 1][0], s[i][1] - s[i - 1][1]);
+        if (acc >= spacing || i === s.length - 1) { out.push({ x: s[i][0], y: s[i][1], stroke: k, first: out.length === 0 || out[out.length - 1].stroke !== k }); acc = 0; }
+      }
+    });
+    return out;
+  }
+  const key = L.text + "|" + L.aspect + "|" + spacing;
+  if (dotCache.has(key)) return dotCache.get(key);
+  const G = 160, W = Math.round(G * L.aspect);
+  const c = document.createElement("canvas"); c.width = W; c.height = G;
+  const g = c.getContext("2d"); drawGlyph(g, L, G, { fill: "#000" });
+  const px = g.getImageData(0, 0, W, G).data;
+  const mask = new Uint8Array(W * G);
+  for (let i = 0; i < W * G; i++) mask[i] = px[i * 4 + 3] > 110 ? 1 : 0;
+  const sk = skeleton(mask, W, G);
+  const pts = [];
+  for (let y = 0; y < G; y++) for (let x = 0; x < W; x++) if (sk[y * W + x]) pts.push([x / G, y / G]);
+  const out = [];
+  for (const [x, y] of pts) if (!out.some((d) => Math.hypot(d.x - x, d.y - y) < spacing)) out.push({ x, y, stroke: 0 });
+  dotCache.set(key, out);
+  return out;
+}
+
+// Which dots the child's ink has passed over.
+export function litDots(dots, strokes, tol = 0.045) {
+  const lit = new Array(dots.length).fill(false);
+  for (const s of strokes) for (const [x, y] of s) for (let i = 0; i < dots.length; i++) if (!lit[i] && Math.abs(dots[i].x - x) < tol && Math.abs(dots[i].y - y) < tol && Math.hypot(dots[i].x - x, dots[i].y - y) < tol) lit[i] = true;
+  return lit;
 }
