@@ -203,7 +203,7 @@ function Celebrate({ stars, text, back, again, next }) {
 
 const audible = (text, lib) => !!(lib[voiceKey(text)] || hasDeviceVoice());
 const HearBtn = ({ text, lib, say, big }) => (
-  <button className={big ? "big-round red" : "icon-btn hear"} onClick={async () => { const r = await playWord(text, lib); if (!r) say("No recording of this yet. Ask a grown-up to read it with you!"); }} aria-label="Hear it"><Volume2 /></button>
+  <button className={big ? "big-round red" : "icon-btn hear"} onClick={async () => { const r = await playWord(text, lib); if (!r) say("This device has no voice for Kannada. Try Chrome or Edge, or ask a grown-up to read it with you!"); }} aria-label="Hear it"><Volume2 /></button>
 );
 
 /* ---------- Today's mission: 4 short steps ---------- */
